@@ -11,8 +11,8 @@
 ; ===========================================================================================================================
 ;
 
-	.model		small							; 1 Segmento de Código e 1 Segmento de Dados
-	.stack										; Tamanho Indefinido de Pilha
+	.model		small									; 1 Segmento de Código e 1 Segmento de Dados
+	.stack												; Tamanho Indefinido de Pilha
 
 ;
 ; ===========================================================================================================================
@@ -20,11 +20,13 @@
 ; ===========================================================================================================================
 ;
 
-_CHAR_ZERO			equ				0
-_CHAR_CR			equ				0Dh			; Caracteres Especiais
+_CHAR_NULL			equ				0
+_CHAR_CR			equ				0Dh					; Caracteres Especiais
 _CHAR_LF			equ				0Ah             
 
+_CHAR_ZERO			equ				30h					; Caracteres Visíveis
 
+_BASE_10			equ				10					; Base Numérica 10
 
 ;
 ; ===========================================================================================================================
@@ -48,7 +50,7 @@ _CHAR_LF			equ				0Ah
 
 
 
-	.exit			0							; Retornar programa bem sucedido para o OS
+	.exit			0									; Retornar programa bem sucedido para o OS
 
 ;
 ; ===========================================================================================================================
@@ -69,25 +71,24 @@ _CHAR_LF			equ				0Ah
 
 atoi			proc 	near
 
-		; A = 0;
-				mov		ax, _CHAR_ZERO
+				mov		ax, 0
 
 atoi_loop:
-				cmp		byte ptr[bx], 0			; Testar se o caractere é nulo '\0'
+				cmp		byte ptr[bx], _CHAR_NULL		; Testar se o caractere é nulo '\0'
 				jz		atoi_return
 
-				mov		cx, 10					; Calcular valor posicional do número
+				mov		cx, _BASE_10					; Calcular valor posicional do número
 				mul		cx
 				mov		ch, 0
 				mov		cl, [bx]
 				add		ax, cx
-				sub		ax, '0'
+				sub		ax, _CHAR_ZERO
 
-				inc		bx						; Incrementar a posição no string
-				jmp		atoi_loop				; Continuar loop
+				inc		bx								; Incrementar a posição no string
+				jmp		atoi_loop						; Continuar loop
 
 atoi_return:
-				ret								; Encerrar função
+				ret										; Encerrar função
 
 atoi			endp
 
