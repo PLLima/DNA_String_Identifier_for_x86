@@ -11,8 +11,8 @@
 ; ===========================================================================================================================
 ;
 
-	.model		small                           ; 1 Segmento de Código e 1 Segmento de Dados
-	.stack                                      ; Tamanho Indefinido de Pilha
+	.model		small							; 1 Segmento de Código e 1 Segmento de Dados
+	.stack										; Tamanho Indefinido de Pilha
 
 ;
 ; ===========================================================================================================================
@@ -20,8 +20,11 @@
 ; ===========================================================================================================================
 ;
 
-_CHAR_CR	        equ		        0Dh         ; Caracteres Especiais
-_CHAR_LF	        equ		        0Ah             
+_CHAR_ZERO			equ				0
+_CHAR_CR			equ				0Dh			; Caracteres Especiais
+_CHAR_LF			equ				0Ah             
+
+
 
 ;
 ; ===========================================================================================================================
@@ -45,13 +48,48 @@ _CHAR_LF	        equ		        0Ah
 
 
 
-	.exit       0                               ; Retornar programa bem sucedido para o OS
+	.exit			0							; Retornar programa bem sucedido para o OS
 
 ;
 ; ===========================================================================================================================
 ; Funções Auxiliares
 ; ===========================================================================================================================
 ;
+; ===========================================================================================================================
+; AX atoi(DS:BX)
+; ===========================================================================================================================
+;
+; Função que converte uma string para um valor hexadecimal:
+;
+; Entrada: DS:BX - Ponteiro para o início da string de origem;
+; Saída:   AX    - Valor hexadecimal/decimal resultante.
+;
+; ===========================================================================================================================
+;
+
+atoi			proc 	near
+
+		; A = 0;
+				mov		ax, _CHAR_ZERO
+
+atoi_loop:
+				cmp		byte ptr[bx], 0			; Testar se o caractere é nulo '\0'
+				jz		atoi_return
+
+				mov		cx, 10					; Calcular valor posicional do número
+				mul		cx
+				mov		ch, 0
+				mov		cl, [bx]
+				add		ax, cx
+				sub		ax, '0'
+
+				inc		bx						; Incrementar a posição no string
+				jmp		atoi_loop				; Continuar loop
+
+atoi_return:
+				ret								; Encerrar função
+
+atoi			endp
 
 ; ---------------------------------------------------------------------------------------------------------------------------
     end
