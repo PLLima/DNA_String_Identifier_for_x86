@@ -51,7 +51,11 @@ _SINGLE_BYTE		equ				1					; 1 Byte
 
 	.data
 
-
+psp_string			db				256 dup (?)			; String fornecida ao chamar o programa (do PSP)
+filename_src		db				256 dup (?)			; Nomes dos arquivos de entrada e saída
+filename_dst		db				256 dup (?)
+filehandle_src		dw				0					; Handles dos arquivo de entrada e saída
+filehandle_dst		dw				0
 
 ; Variáveis de Funções Auxiliares
 
@@ -69,9 +73,10 @@ sprintf_w_m			dw				0
 
 	.startup
 
+				lea		bx, psp_string					; Copiar string de entrada do programa
+				call	copy_psp_s
 
-
-	.exit			0									; Retornar programa bem sucedido para o OS
+	.exit		0										; Retornar programa bem sucedido para o OS
 
 ;
 ; ===========================================================================================================================
@@ -325,17 +330,17 @@ fclose			endp
 
 ;
 ; ===========================================================================================================================
-; void copy_input_s(DS:BX)
+; void copy_psp_s(DS:BX)
 ; ===========================================================================================================================
 ;
-; Função que copia a string de entrada fornecida ao chamar o programa:
+; Função que copia a string de entrada fornecida ao chamar o programa (do Program Segment Prefix):
 ;
 ; Entrada: DS:BX - Ponteiro para o início da região de memória para onde será copiada a string.
 ;
 ; ===========================================================================================================================
 ;
 
-copy_input_s	proc	near
+copy_psp_s		proc	near
 
 				push 	ds 								; Salvar segmentos na pilha
 				push 	es
@@ -358,7 +363,7 @@ copy_input_s	proc	near
 				pop 	ds
 				ret
 
-copy_input_s	endp
+copy_psp_s		endp
 
 ; ---------------------------------------------------------------------------------------------------------------------------
     end
