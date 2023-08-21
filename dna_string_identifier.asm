@@ -20,13 +20,28 @@
 ; ===========================================================================================================================
 ;
 
-_CHAR_NULL			equ				0
-_CHAR_CR			equ				0Dh					; Caracteres Especiais
+_CHAR_NULL			equ				0					; Caracteres Especiais
+_CHAR_CR			equ				0Dh
 _CHAR_LF			equ				0Ah             
 
-_CHAR_ZERO			equ				30h					; Caracteres Visíveis
+_CHAR_+				equ				2Bh					; Caracteres Visíveis
+_CHAR_-				equ				2Dh
+_CHAR_ZERO			equ				30h
+_CHAR_A				equ				41h
+_CHAR_a				equ				61h
+_CHAR_C				equ				43h
+_CHAR_c				equ				63h
+_CHAR_f				equ				66h
+_CHAR_G				equ				47h
+_CHAR_g				equ				67h
+_CHAR_n				equ				6Eh
+_CHAR_o				equ				6Fh
+_CHAR_T				equ				54h
+_CHAR_t				equ				74h
 
 _BASE_10			equ				10					; Base Numérica 10
+
+_SINGLE_BYTE		equ				1					; 1 Byte
 
 ;
 ; ===========================================================================================================================
@@ -190,6 +205,160 @@ printf_s_return:
 				ret
 	
 printf_s		endp
+
+;
+; ===========================================================================================================================
+; CF, BX fopen(DS:DX)
+; ===========================================================================================================================
+;
+; Função que abre um arquivo com o nome especificado:
+;
+; Entrada: DS:DX - Ponteiro para o nome do arquivo de entrada;
+; Saída:   CF    - Flag indicando se a operação foi bem sucedida (0) ou não (1);
+;          BX    - Handle do arquivo.
+;
+; ===========================================================================================================================
+;
+
+fopen			proc	near
+
+				mov		al, 0							; Chamar a respectiva interrupção de sistema
+				mov		ah, 3Dh
+				int		21h
+				mov		bx, ax
+				ret
+
+fopen			endp
+
+;
+; ===========================================================================================================================
+; CF, BX fcreate(DS:DX)
+; ===========================================================================================================================
+;
+; Função que cria um arquivo com o nome especificado:
+;
+; Entrada: DS:DX - Ponteiro para o nome do arquivo de entrada;
+; Saída:   CF    - Flag indicando se a operação foi bem sucedida (0) ou não (1);
+;          BX    - Handle do arquivo.
+;
+; ===========================================================================================================================
+;
+
+fcreate			proc	near
+
+				mov		cx, 0							; Chamar a respectiva interrupção de sistema
+				mov		ah, 3Ch
+				int		21h
+				mov		bx, ax
+				ret
+
+fcreate			endp
+
+;
+; ===========================================================================================================================
+; CF, AX fread_b(BX, DX)
+; ===========================================================================================================================
+;
+; Função que lê um byte de um arquivo especificado:
+;
+; Entrada: BX - Handle do arquivo;
+;          DX - Endereço onde salvar byte a ser lido;
+; Saída:   CF - Flag indicando se a operação foi bem sucedida (0) ou não (1);
+;          AX - Número de bytes lidos;
+;
+; ===========================================================================================================================
+;
+
+fread_b			proc	near
+
+				mov		ah, 3Fh							; Chamar a respectiva interrupção de sistema
+				mov		cx, _SINGLE_BYTE
+				int		21h
+				ret
+
+fread_b			endp
+
+;
+; ===========================================================================================================================
+; CF, AX fwrite_b(BX, DS:DX)
+; ===========================================================================================================================
+;
+; Função que escreve um byte de um arquivo especificado:
+;
+; Entrada: BX    - Handle do arquivo;
+;          DS:DX - Endereço do byte a ser escrito;
+; Saída:   CF    - Flag indicando se a operação foi bem sucedida (0) ou não (1);
+;          AX    - Número de bytes escritos;
+;
+; ===========================================================================================================================
+;
+
+fwrite_b		proc	near
+
+				mov		ah, 40h							; Chamar a respectiva interrupção de sistema
+				mov		cx, _SINGLE_BYTE
+				int		21h
+				ret
+
+fwrite_b		endp
+
+;
+; ===========================================================================================================================
+; CF fclose(BX)
+; ===========================================================================================================================
+;
+; Função que fecha um arquivo com o nome especificado:
+;
+; Entrada: BX - Handle do arquivo;
+; Saída:   CF - Flag indicando se a operação foi bem sucedida (0) ou não (1).
+;
+; ===========================================================================================================================
+;
+
+fclose			proc	near
+
+				mov		ah, 3Eh							; Chamar a respectiva interrupção de sistema
+				int		21h
+				ret
+
+fclose			endp
+
+;
+; ===========================================================================================================================
+; void copy_input_s(DS:BX)
+; ===========================================================================================================================
+;
+; Função que copia a string de entrada fornecida ao chamar o programa:
+;
+; Entrada: DS:BX - Ponteiro para o início da região de memória para onde será copiada a string.
+;
+; ===========================================================================================================================
+;
+
+copy_input_s	proc	near
+
+				push 	ds 								; Salvar segmentos na pilha
+				push 	es
+
+				mov 	ax, ds 							; Trocar DS <-> ES para poder usar o MOVSB
+				mov 	cx, es
+				mov 	ds, cx
+				mov 	es, ax
+				mov 	si, 80h 						; Obter o tamanho do string e colocar em CX
+				mov 	ch, 0
+				mov 	cl, [si]
+				mov 	si, 81h 						; Inicializar ponteiros de origem e destino
+				mov 	di, bx
+				rep movsb
+
+				inc		bx								; Colocar indicador de final de string '\0'
+				mov		[bx], byte _CHAR_NULL
+
+				pop 	es 								; Retornar as informações dos segmentos
+				pop 	ds
+				ret
+
+copy_input_s	endp
 
 ; ---------------------------------------------------------------------------------------------------------------------------
     end
