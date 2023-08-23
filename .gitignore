@@ -2,3 +2,7 @@
 *.csv
 *.obj
 *.exe
+*.bat
+*.lst
+*.sbr
+*.map
