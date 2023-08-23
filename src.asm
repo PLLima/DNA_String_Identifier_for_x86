@@ -20,28 +20,39 @@
 ; ===========================================================================================================================
 ;
 
-_CHAR_NULL			equ				0					; Caracteres Especiais
-_CHAR_CR			equ				0Dh
-_CHAR_LF			equ				0Ah             
+_CHAR_NULL					equ				0					; Caracteres Especiais
+_CHAR_CR					equ				0Dh
+_CHAR_LF					equ				0Ah             
 
-_CHAR_PLUS			equ				2Bh					; Caracteres Visíveis
-_CHAR_MINUS			equ				2Dh
-_CHAR_ZERO			equ				30h
-_CHAR_U_A			equ				41h
-_CHAR_L_A			equ				61h
-_CHAR_U_C			equ				43h
-_CHAR_L_C			equ				63h
-_CHAR_L_F			equ				66h
-_CHAR_U_G			equ				47h
-_CHAR_L_G			equ				67h
-_CHAR_L_N			equ				6Eh
-_CHAR_L_O			equ				6Fh
-_CHAR_U_T			equ				54h
-_CHAR_L_T			equ				74h
+_CHAR_PLUS					equ				2Bh					; Caracteres Visíveis
+_CHAR_MINUS					equ				2Dh
+_CHAR_ZERO					equ				30h
+_CHAR_U_A					equ				41h
+_CHAR_L_A					equ				61h
+_CHAR_U_C					equ				43h
+_CHAR_L_C					equ				63h
+_CHAR_L_F					equ				66h
+_CHAR_U_G					equ				47h
+_CHAR_L_G					equ				67h
+_CHAR_L_N					equ				6Eh
+_CHAR_L_O					equ				6Fh
+_CHAR_U_T					equ				54h
+_CHAR_L_T					equ				74h
 
-_BASE_10			equ				10					; Base Numérica 10
+_BASE_10					equ				10					; Base Numérica 10
 
-_SINGLE_BYTE		equ				1					; 1 Byte
+_SINGLE_BYTE				equ				1					; 1 Byte
+
+; Tabela de Códigos de Erro
+
+_ERROR_NONE					equ				0					; Nenhum erro
+_ERROR_FILENAME				equ				1					; Nome do arquivo de entrada incorreto/inexistente
+_ERROR_SMALL_FILESIZE		equ				2					; Caracteres no arquivo menor que o valor de 'n'
+_ERROR_BIG_FILESIZE			equ				3					; Mais que 10.000 caracteres no arquivo
+_ERROR_INSUFICIENT_PSP		equ				4					; String de entrada incompleta (faltando opções)
+_ERROR_INVALID_PSP			equ				5					; String de entrada inválida (opções '-xXx' incorretas)
+_ERROR_INVALID_PSP_PARAM	equ				6					; String de entrada inválida (parâmetros de opções incorretos)
+_ERROR_INVALID_CHAR			equ				7					; Caractere inválido no arquivo de entrada
 
 ;
 ; ===========================================================================================================================
@@ -51,17 +62,19 @@ _SINGLE_BYTE		equ				1					; 1 Byte
 
 	.data
 
-psp_string			db				256 dup (?)			; String fornecida ao chamar o programa (do PSP)
-filename_src		db				256 dup (?)			; Nomes dos arquivos de entrada e saída
-filename_dst		db				256 dup (?)
-filehandle_src		dw				0					; Handles dos arquivo de entrada e saída
-filehandle_dst		dw				0
+psp_string					db				256 dup (?)			; String fornecida ao chamar o programa (do PSP)
+filename_src				db				256 dup (?)			; Nomes dos arquivos de entrada e saída
+filename_dst				db				256 dup (?)
+filehandle_src				dw				0					; Handles dos arquivo de entrada e saída
+filehandle_dst				dw				0
 
 ; Variáveis de Funções Auxiliares
 
-sprintf_w_n			dw				0
-sprintf_w_f			db				0
-sprintf_w_m			dw				0
+sprintf_w_n					dw				0
+sprintf_w_f					db				0
+sprintf_w_m					dw				0
+
+error_code					db				_ERROR_NONE			; Variáveis do tratador de erros
 
 ;
 ; ===========================================================================================================================
@@ -72,14 +85,15 @@ sprintf_w_m			dw				0
     .code
 
 	.startup
+				mov		error_code, _ERROR_NONE			; Inicializar variáveis do programa
 
 				lea		bx, psp_string					; Copiar string de entrada do programa
 				call	copy_psp_s
 
-				lea		bx, psp_string
-				call	printf_s
+main_return:
+				call	error_handler
 
-	.exit		0										; Retornar programa bem sucedido para o OS
+	.exit		_ERROR_NONE								; Retornar programa bem sucedido para o OS
 
 ;
 ; ===========================================================================================================================
@@ -369,6 +383,80 @@ copy_psp_s		proc	near
 				ret
 
 copy_psp_s		endp
+
+;
+; ===========================================================================================================================
+; Funções da Aplicação
+; ===========================================================================================================================
+;
+; ===========================================================================================================================
+; void error_handler(error_code, ...)
+; ===========================================================================================================================
+;
+; Função que lida com todos os erros tratáveis do programa:
+;
+; Entrada: error_code - Variável global com a informação do respectivo erro;
+;          ...        - Outras variáveis globais necessárias para tratar cada cada erro.
+;
+; ===========================================================================================================================
+;
+
+error_handler	proc	near
+
+				cmp		error_code, _ERROR_NONE			; Se não houve erro, ignorar função
+				je		error_handler_return
+
+				cmp		error_code, _ERROR_FILENAME
+				jne		not_filename_error
+
+														; Tratar erro de nome de arquivo
+				jmp		error_handler_return
+
+not_filename_error:
+				cmp		error_code, _ERROR_SMALL_FILESIZE
+				jne		not_small_filesize_error
+
+														; Tratar erro de arquivo muito pequeno
+				jmp		error_handler_return
+
+not_small_filesize_error:
+				cmp		error_code, _ERROR_BIG_FILESIZE
+				jne		not_big_filesize_error
+
+														; Tratar erro de arquivo muito grande
+				jmp		error_handler_return
+
+not_big_filesize_error:
+				cmp		error_code, _ERROR_INSUFICIENT_PSP
+				jne		not_insuficient_psp_error
+
+														; Tratar erro de string de entrada insuficiente
+				jmp		error_handler_return
+
+not_insuficient_psp_error:
+				cmp		error_code, _ERROR_INVALID_PSP
+				jne		not_invalid_psp_error
+
+														; Tratar erro de opções de entrada inválidas
+				jmp		error_handler_return
+
+not_invalid_psp_error:
+				cmp		error_code, _ERROR_INVALID_PSP_PARAM
+				jne		not_invalid_psp_param_error
+
+														; Tratar erro de parâmetros de opções de entrada inválidos
+				jmp		error_handler_return
+
+not_invalid_psp_param_error:
+				cmp		error_code, _ERROR_INVALID_CHAR
+				jne		error_handler_return
+
+														; Tratar erro de parâmetros de caractere inválido no arquivo
+
+error_handler_return:
+				ret
+
+error_handler	endp
 
 ; ---------------------------------------------------------------------------------------------------------------------------
     end
