@@ -90,6 +90,10 @@ error_code					db				_ERROR_NONE			; Variáveis do tratador de erros
 				lea		bx, psp_string					; Copiar string de entrada do programa
 				call	copy_psp_s
 
+				call	fix_segments					; Unificar segmentos de dados
+
+
+
 main_return:
 				call	error_handler
 
@@ -388,6 +392,26 @@ copy_psp_s		endp
 ; ===========================================================================================================================
 ; Funções da Aplicação
 ; ===========================================================================================================================
+;
+; ===========================================================================================================================
+; void fix_segments(void)
+; ===========================================================================================================================
+;
+; Função que aponta o segmento extra para o segmento de dados.
+;
+; ===========================================================================================================================
+;
+
+fix_segments	proc	near
+
+				mov 	ax, ds 							; Colocar ES <- DS para utilizar o modelo small do MASM
+				mov 	es, ax
+
+				ret
+
+fix_segments	endp
+
+
 ;
 ; ===========================================================================================================================
 ; void error_handler(error_code, ...)
