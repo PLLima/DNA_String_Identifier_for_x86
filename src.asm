@@ -63,6 +63,7 @@ _ERROR_INVALID_CHAR			equ				7					; Caractere inválido no arquivo de entrada
 	.data
 
 psp_string					db				256 dup (?)			; String fornecida ao chamar o programa (do PSP)
+psp_string_cursor			dw				?					; Ponteiro para navegar a string PSP
 filename_src				db				256 dup (?)			; Nomes dos arquivos de entrada e saída
 filename_dst				db				256 dup (?)
 filehandle_src				dw				0					; Handles dos arquivo de entrada e saída
@@ -86,13 +87,12 @@ error_code					db				_ERROR_NONE			; Variáveis do tratador de erros
 
 	.startup
 				mov		error_code, _ERROR_NONE			; Inicializar variáveis do programa
+				lea		psp_string_cursor, psp_string
 
 				lea		bx, psp_string					; Copiar string de entrada do programa
 				call	copy_psp_s
 
 				call	fix_segments					; Unificar segmentos de dados
-
-
 
 main_return:
 				call	error_handler
