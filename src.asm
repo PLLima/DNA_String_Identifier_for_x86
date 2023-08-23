@@ -24,20 +24,20 @@ _CHAR_NULL			equ				0					; Caracteres Especiais
 _CHAR_CR			equ				0Dh
 _CHAR_LF			equ				0Ah             
 
-_CHAR_+				equ				2Bh					; Caracteres Visíveis
-_CHAR_-				equ				2Dh
+_CHAR_PLUS			equ				2Bh					; Caracteres Visíveis
+_CHAR_MINUS			equ				2Dh
 _CHAR_ZERO			equ				30h
-_CHAR_A				equ				41h
-_CHAR_a				equ				61h
-_CHAR_C				equ				43h
-_CHAR_c				equ				63h
-_CHAR_f				equ				66h
-_CHAR_G				equ				47h
-_CHAR_g				equ				67h
-_CHAR_n				equ				6Eh
-_CHAR_o				equ				6Fh
-_CHAR_T				equ				54h
-_CHAR_t				equ				74h
+_CHAR_U_A			equ				41h
+_CHAR_L_A			equ				61h
+_CHAR_U_C			equ				43h
+_CHAR_L_C			equ				63h
+_CHAR_L_F			equ				66h
+_CHAR_U_G			equ				47h
+_CHAR_L_G			equ				67h
+_CHAR_L_N			equ				6Eh
+_CHAR_L_O			equ				6Fh
+_CHAR_U_T			equ				54h
+_CHAR_L_T			equ				74h
 
 _BASE_10			equ				10					; Base Numérica 10
 
@@ -75,6 +75,9 @@ sprintf_w_m			dw				0
 
 				lea		bx, psp_string					; Copiar string de entrada do programa
 				call	copy_psp_s
+
+				lea		bx, psp_string
+				call	printf_s
 
 	.exit		0										; Retornar programa bem sucedido para o OS
 
@@ -261,51 +264,51 @@ fcreate			endp
 
 ;
 ; ===========================================================================================================================
-; CF, AX fread_b(BX, DX)
+; CF, AX fread(BX, DS:DX, CX)
 ; ===========================================================================================================================
 ;
 ; Função que lê um byte de um arquivo especificado:
 ;
-; Entrada: BX - Handle do arquivo;
-;          DX - Endereço onde salvar byte a ser lido;
-; Saída:   CF - Flag indicando se a operação foi bem sucedida (0) ou não (1);
-;          AX - Número de bytes lidos;
+; Entrada: BX    - Handle do arquivo;
+;          DS:DX - Endereço onde salvar byte a ser lido;
+;          CX    - Número de bytes para serem lidos;
+; Saída:   CF    - Flag indicando se a operação foi bem sucedida (0) ou não (1);
+;          AX    - Número de bytes lidos;
 ;
 ; ===========================================================================================================================
 ;
 
-fread_b			proc	near
+fread			proc	near
 
 				mov		ah, 3Fh							; Chamar a respectiva interrupção de sistema
-				mov		cx, _SINGLE_BYTE
 				int		21h
 				ret
 
-fread_b			endp
+fread			endp
 
 ;
 ; ===========================================================================================================================
-; CF, AX fwrite_b(BX, DS:DX)
+; CF, AX fwrite(BX, DS:DX, CX)
 ; ===========================================================================================================================
 ;
 ; Função que escreve um byte de um arquivo especificado:
 ;
 ; Entrada: BX    - Handle do arquivo;
 ;          DS:DX - Endereço do byte a ser escrito;
+;          CX    - Número de bytes para serem lidos;
 ; Saída:   CF    - Flag indicando se a operação foi bem sucedida (0) ou não (1);
 ;          AX    - Número de bytes escritos;
 ;
 ; ===========================================================================================================================
 ;
 
-fwrite_b		proc	near
+fwrite			proc	near
 
 				mov		ah, 40h							; Chamar a respectiva interrupção de sistema
-				mov		cx, _SINGLE_BYTE
 				int		21h
 				ret
 
-fwrite_b		endp
+fwrite			endp
 
 ;
 ; ===========================================================================================================================
@@ -349,18 +352,20 @@ copy_psp_s		proc	near
 				mov 	cx, es
 				mov 	ds, cx
 				mov 	es, ax
+
 				mov 	si, 80h 						; Obter o tamanho do string e colocar em CX
 				mov 	ch, 0
 				mov 	cl, [si]
+
 				mov 	si, 81h 						; Inicializar ponteiros de origem e destino
 				mov 	di, bx
 				rep movsb
 
-				inc		bx								; Colocar indicador de final de string '\0'
-				mov		[bx], byte _CHAR_NULL
-
 				pop 	es 								; Retornar as informações dos segmentos
 				pop 	ds
+
+				inc		di								; Colocar indicador de final de string '\0'
+				mov		byte [di], _CHAR_NULL
 				ret
 
 copy_psp_s		endp
