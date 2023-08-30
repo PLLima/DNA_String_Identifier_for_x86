@@ -24,7 +24,8 @@ _CHAR_NULL					equ				0					; Caracteres Especiais
 _CHAR_CR					equ				0Dh
 _CHAR_LF					equ				0Ah             
 
-_CHAR_PLUS					equ				2Bh					; Caracteres Visíveis
+_CHAR_SPACE					equ				20h					; Caracteres Visíveis
+_CHAR_PLUS					equ				2Bh
 _CHAR_MINUS					equ				2Dh
 _CHAR_ZERO					equ				30h
 _CHAR_U_A					equ				41h
@@ -63,7 +64,10 @@ _ERROR_INVALID_CHAR			equ				7					; Caractere inválido no arquivo de entrada
 	.data
 
 psp_string					db				256 dup (?)			; String fornecida ao chamar o programa (do PSP)
+psp_string_size				db				?					; Tamanho do string de entrada
 psp_string_cursor			dw				?					; Ponteiro para navegar a string PSP
+psp_string_segments			db				?					; Contador de segmentos da string de entrada
+
 filename_src				db				256 dup (?)			; Nomes dos arquivos de entrada e saída
 filename_dst				db				256 dup (?)
 filehandle_src				dw				0					; Handles dos arquivo de entrada e saída
@@ -87,12 +91,20 @@ error_code					db				_ERROR_NONE			; Variáveis do tratador de erros
 
 	.startup
 				mov		error_code, _ERROR_NONE			; Inicializar variáveis do programa
-				lea		psp_string_cursor, psp_string
+				lea		ax, psp_string
+				mov		psp_string_cursor, ax
+				mov		psp_string_segments, 0
 
 				lea		bx, psp_string					; Copiar string de entrada do programa
 				call	copy_psp_s
 
 				call	fix_segments					; Unificar segmentos de dados
+
+				lea		bx, psp_string					; Contar substrings e separá-las por '\0'
+				mov		ch, 0
+				mov		cl, psp_string_size
+				call	spaces_to_null
+				mov		psp_string_segments, dl
 
 main_return:
 				call	error_handler
@@ -371,9 +383,10 @@ copy_psp_s		proc	near
 				mov 	ds, cx
 				mov 	es, ax
 
-				mov 	si, 80h 						; Obter o tamanho do string e colocar em CX
+				mov		si, 80h							; Obter o tamanho do string e colocar em CX
+				mov		dl, [si]
 				mov 	ch, 0
-				mov 	cl, [si]
+				mov 	cl, dl
 
 				mov 	si, 81h 						; Inicializar ponteiros de origem e destino
 				mov 	di, bx
@@ -382,7 +395,8 @@ copy_psp_s		proc	near
 				pop 	es 								; Retornar as informações dos segmentos
 				pop 	ds
 
-				inc		di								; Colocar indicador de final de string '\0'
+				mov		psp_string_size, dl				; Colocar indicador de final de string '\0'
+				dec 	di
 				mov		byte [di], _CHAR_NULL
 				ret
 
@@ -411,6 +425,43 @@ fix_segments	proc	near
 
 fix_segments	endp
 
+;
+; ===========================================================================================================================
+; DX spaces_to_null(DS:BX, CX)
+; ===========================================================================================================================
+;
+; Função que troca os espaços de uma string para caracteres nulos:
+;
+; Entrada: DS:BX - Ponteiro para o início da string;
+;          CX    - Tamanho do string.
+; Saída:   DX    - Número de segmentos encontrados
+;
+; ===========================================================================================================================
+;
+
+spaces_to_null	proc	near
+
+				mov		dx, 0							; Inicializar variáveis internas e de saída
+
+				mov		di, bx							; Configurar parâmetros para a instrução de comparação
+				mov		ah, _CHAR_NULL
+				mov		al, _CHAR_SPACE
+				cld
+
+spaces_to_null_loop:
+				repne scasb								; Encontrar a próxima ocorrência de espaço na sentença
+
+				cmp		cx, 0							; Descobrir se a string terminou
+				je		spaces_to_null_return
+
+				mov		[di - 1], ah					; Colocar nulo no lugar de espaço e 
+				inc		dx
+				jmp		spaces_to_null_loop
+
+spaces_to_null_return:
+				ret
+
+spaces_to_null	endp
 
 ;
 ; ===========================================================================================================================
