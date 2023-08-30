@@ -20,6 +20,9 @@
 ; ===========================================================================================================================
 ;
 
+_ENABLED					equ				1					; Habilitado/Desabilitado
+_DISABLED					equ				0
+
 _CHAR_NULL					equ				0					; Caracteres Especiais
 _CHAR_CR					equ				0Dh
 _CHAR_LF					equ				0Ah             
@@ -44,6 +47,8 @@ _BASE_10					equ				10					; Base Numérica 10
 
 _SINGLE_BYTE				equ				1					; 1 Byte
 
+_MAX_FILENAME				equ				256					; Tamanho máximo de nome de arquivo
+
 ; Tabela de Códigos de Erro
 
 _ERROR_NONE					equ				0					; Nenhum erro
@@ -65,21 +70,54 @@ _ERROR_INVALID_CHAR			equ				7					; Caractere inválido no arquivo de entrada
 
 psp_string					db				256 dup (?)			; String fornecida ao chamar o programa (do PSP)
 psp_string_size				db				?					; Tamanho do string de entrada
-psp_string_cursor			dw				?					; Ponteiro para navegar a string PSP
 psp_string_segments			db				?					; Contador de segmentos da string de entrada
+psp_string_segment_cursor	dw				?					; Ponteiro para início de segmentos da string PSP
+
+option_a					db				?					; Flags de opções de entrada
+option_c					db				?				
+option_f					db				?
+option_g					db				?
+option_n					db				?
+option_o					db				?
+option_plus					db				?
+option_t					db				?
 
 filename_src				db				256 dup (?)			; Nomes dos arquivos de entrada e saída
 filename_dst				db				256 dup (?)
 filehandle_src				dw				0					; Handles dos arquivo de entrada e saída
 filehandle_dst				dw				0
 
-; Variáveis de Funções Auxiliares
+; Strings Constantes
+null_msg					db				_CHAR_NULL
+newline						db				_CHAR_CR, _CHAR_LF, _CHAR_NULL
+filename_dst_std			db				'a.out', _CHAR_NULL	; String de saída padrão
 
+; Variáveis de Funções Auxiliares
 sprintf_w_n					dw				0
 sprintf_w_f					db				0
 sprintf_w_m					dw				0
 
-error_code					db				_ERROR_NONE			; Variáveis do tratador de erros
+; Variáveis do Tratador de Erros
+error_code					db				_ERROR_NONE			; Código de erro
+error_string1				db				256 dup (?)			; Strings com informações do respectivo erro
+error_string2				db				256 dup (?)
+
+; Mensagens de Erro Constantes
+error_invalid_msg_o			db				'" invalido.', _CHAR_CR, _CHAR_LF, _CHAR_NULL
+error_invalid_msg_a			db				'" invalida.', _CHAR_CR, _CHAR_LF, _CHAR_NULL
+error_inexistent_msg		db				'" inexistente.', _CHAR_CR, _CHAR_LF, _CHAR_NULL
+error_filename_msg			db				_CHAR_CR, _CHAR_LF, 'Erro 01: nome de arquivo "', _CHAR_NULL
+error_small_filesize_msg1	db				_CHAR_CR, _CHAR_LF, 'Erro 02: arquivo muito pequeno. Necessario minimo de ', _CHAR_NULL
+error_small_filesize_msg2	db				' caracteres no arquivo.', _CHAR_CR, _CHAR_LF, _CHAR_NULL
+error_big_filesize_msg		db				_CHAR_CR, _CHAR_LF, 'Erro 03: arquivo muito grande. Numero maximo de caracteres aceitos eh 10.000.', _CHAR_CR, _CHAR_LF, _CHAR_NULL
+error_insuficient_psp_msg1	db				_CHAR_CR, _CHAR_LF, 'Erro 04: opcoes de entrada insuficientes. Faltam as opcoes "', _CHAR_NULL
+error_insuficient_psp_msg2	db				'".', _CHAR_CR, _CHAR_LF, _CHAR_NULL
+error_invalid_psp_msg		db				_CHAR_CR, _CHAR_LF, 'Erro 05: opcao de entrada "', _CHAR_NULL
+error_invalid_psp_param_msg1 db				_CHAR_CR, _CHAR_LF, 'Erro 06: parametro "', _CHAR_NULL
+error_invalid_psp_param_msg2 db				'" da opcao "', _CHAR_NULL
+error_invalid_psp_param_msgv db				_CHAR_CR, _CHAR_LF, 'Erro 06: parametro inexiste da opcao "', _CHAR_NULL
+error_invalid_char_msg1		db				_CHAR_CR, _CHAR_LF, 'Erro 07: caractere "', _CHAR_NULL
+error_invalid_char_msg2		db				'" do arquivo na linha "', _CHAR_NULL
 
 ;
 ; ===========================================================================================================================
@@ -91,8 +129,15 @@ error_code					db				_ERROR_NONE			; Variáveis do tratador de erros
 
 	.startup
 				mov		error_code, _ERROR_NONE			; Inicializar variáveis do programa
-				lea		ax, psp_string
-				mov		psp_string_cursor, ax
+				mov		option_a, _DISABLED
+				mov		option_c, _DISABLED
+				mov		option_f, _DISABLED
+				mov		option_g, _DISABLED
+				mov		option_n, _DISABLED
+				mov		option_o, _DISABLED
+				mov		option_plus, _DISABLED
+				mov		option_t, _DISABLED
+				mov		psp_string_segment_cursor, offset psp_string
 				mov		psp_string_segments, 0
 
 				lea		bx, psp_string					; Copiar string de entrada do programa
@@ -100,11 +145,174 @@ error_code					db				_ERROR_NONE			; Variáveis do tratador de erros
 
 				call	fix_segments					; Unificar segmentos de dados
 
+				lea		si, filename_dst_std			; Inicializar arquivo de saída como 'a.out'
+				lea		di, filename_dst
+				call	strcpy
+
 				lea		bx, psp_string					; Contar substrings e separá-las por '\0'
 				mov		ch, 0
 				mov		cl, psp_string_size
-				call	spaces_to_null
+				call	convert_spaces_to_null
 				mov		psp_string_segments, dl
+
+input_loop:
+				dec		psp_string_segments
+
+				inc		psp_string_segment_cursor		; Inicializar busca em um segmento
+				mov		bp, psp_string_segment_cursor
+
+				cmp		[bp], byte ptr _CHAR_MINUS		; Verificar se o caractere comparado é um hífen
+				jne		segment_increment
+
+				inc		bp								; Se for um hífen, verificar próximos caracteres
+
+				cmp		[bp], byte ptr _CHAR_L_F		; Se for uma opção 'f'
+				jne		not_option_f
+
+				inc		bp
+				cmp		[bp], byte ptr _CHAR_NULL		; Descobrir se é uma opção válida
+				je		valid_option_f
+
+				mov		error_code, _ERROR_INVALID_PSP	; Atribuir respectivo código de erro
+
+				lea		di, error_string1				; Guardar mensagem de erro a ser mostrada
+				mov		si, psp_string_segment_cursor
+				call	strcpy
+
+				jmp		main_return						; Encerrar programa com erro
+
+valid_option_f:
+				mov		option_f, _ENABLED				; Habilitar opção f
+
+				cmp		psp_string_segments, 0			; Avaliar se há parâmetro a ser processado
+				jne		valid_param_f
+
+				mov		error_code, _ERROR_INVALID_PSP_PARAM
+
+				lea		di, error_string1				; Guardar mensagens de erro a serem mostradas
+				mov		si, psp_string_segment_cursor
+				call	strcpy
+
+				lea		di, error_string2
+				lea		si, null_msg
+				call	strcpy
+
+				jmp		main_return						; Encerrar programa com erro
+
+valid_param_f:
+				inc		bp
+				mov		si, bp							; Copiar string com o nome de arquivo
+				lea		di, filename_src
+				call	strcpy
+				mov		psp_string_segment_cursor, si	; Atualizar apontador de segmentos
+
+				dec		psp_string_segments				; Descontar um segmento no contador
+
+				jmp		segment_increment_skip
+
+not_option_f:
+				cmp		[bp], byte ptr _CHAR_L_O		; Se for uma opção 'o'
+				jne		not_option_o
+
+				inc		bp
+				cmp		[bp], byte ptr _CHAR_NULL		; Descobrir se é uma opção válida
+				je		valid_option_o
+
+				mov		error_code, _ERROR_INVALID_PSP	; Atribuir respectivo código de erro
+
+				lea		di, error_string1				; Guardar mensagem de erro a ser mostrada
+				mov		si, psp_string_segment_cursor
+				call	strcpy
+
+				jmp		main_return						; Encerrar programa com erro
+
+valid_option_o:
+				mov		option_o, _ENABLED				; Habilitar opção f
+
+				cmp		psp_string_segments, 0			; Avaliar se há parâmetro a ser processado
+				jne		valid_param_o
+
+				mov		error_code, _ERROR_INVALID_PSP_PARAM
+
+				lea		di, error_string1				; Guardar mensagens de erro a serem mostradas
+				mov		si, psp_string_segment_cursor
+				call	strcpy
+
+				lea		di, error_string2
+				lea		si, null_msg
+				call	strcpy
+
+				jmp		main_return						; Encerrar programa com erro
+
+valid_param_o:
+				inc		bp
+				mov		si, bp							; Copiar string com o nome de arquivo
+				lea		di, filename_dst
+				call	strcpy
+				mov		psp_string_segment_cursor, si	; Atualizar apontador de segmentos
+
+				dec		psp_string_segments				; Descontar um segmento no contador
+
+				jmp		segment_increment_skip
+
+not_option_o:
+				cmp		[bp], byte ptr _CHAR_L_N					; Se for uma opção 'n'
+				jne		not_option_n
+
+
+				jmp		segment_increment
+
+not_option_n:
+				cmp		[bp], byte ptr _CHAR_L_A					; Se for uma opção 'a'
+				jne		not_option_a
+
+
+				jmp		segment_increment
+
+not_option_a:
+				cmp		[bp], byte ptr _CHAR_L_T					; Se for uma opção 't'
+				jne		not_option_t
+
+
+				jmp		segment_increment
+
+not_option_t:
+				cmp		[bp], byte ptr _CHAR_L_C					; Se for uma opção 'c'
+				jne		not_option_c
+
+
+				jmp		segment_increment
+
+not_option_c:
+				cmp		[bp], byte ptr _CHAR_L_G					; Se for uma opção 'g'
+				jne		not_option_g
+
+
+				jmp		segment_increment
+
+not_option_g:
+				cmp		[bp], byte ptr _CHAR_PLUS				; Se for uma opção '+'
+				jne		segment_increment
+
+
+
+segment_increment:
+				mov		bx, bp							; Encontrar o final do segmento atual
+				call	find_end_of_string
+				mov		psp_string_segment_cursor, bx
+
+segment_increment_skip:
+				cmp		psp_string_segments, 0			; Continuar loop até percorrer todos segmentos
+				jne		input_loop
+
+				lea		bx, newline
+				call	printf_s
+				lea		bx, filename_src
+				call	printf_s
+				lea		bx, newline
+				call	printf_s
+				lea		bx, filename_dst
+				call	printf_s
 
 main_return:
 				call	error_handler
@@ -166,6 +374,8 @@ atoi			endp
 
 sprintf_w		proc	near
 
+				push	bp								; Salvar bp na pilha
+
 				mov		sprintf_w_n, ax					; Inicializar variáveis internas
 				mov		cx, 5
 				mov		sprintf_w_m, 10000
@@ -209,6 +419,9 @@ sprintf_w_continue:
 
 sprintf_w_return:
 				mov		byte ptr[bx], _CHAR_NULL		; Colocar caractere de fim de string
+
+				pop		bp								; Retornar valor de bp
+
 				ret
 		
 sprintf_w		endp
@@ -243,6 +456,36 @@ printf_s_return:
 				ret
 	
 printf_s		endp
+
+;
+; ===========================================================================================================================
+; ES:DI, DS:SI strcpy(ES:DI, DS:SI)
+; ===========================================================================================================================
+;
+; Função que copia uma string para outro lugar da memória:
+;
+; Entrada: ES:DI - Ponteiro para o início da string de destino;
+;          DS:SI - Ponteiro para o início da string de origem;
+; Saída:   ES:DI - Ponteiro para o marcador de final de string de destino;
+;          DS:SI - Ponteiro para o marcador de final de string de origem.
+;
+; ===========================================================================================================================
+;
+
+strcpy			proc	near
+
+				cld
+strcpy_loop:
+				movsb									; Copiar a string de origem para o destino
+				cmp		[si - 1], byte ptr _CHAR_NULL
+				jne		strcpy_loop
+
+				dec		si
+				dec		di
+
+				ret
+
+strcpy			endp
 
 ;
 ; ===========================================================================================================================
@@ -427,7 +670,7 @@ fix_segments	endp
 
 ;
 ; ===========================================================================================================================
-; DX spaces_to_null(DS:BX, CX)
+; DX convert_spaces_to_null(DS:BX, CX)
 ; ===========================================================================================================================
 ;
 ; Função que troca os espaços de uma string para caracteres nulos:
@@ -439,7 +682,7 @@ fix_segments	endp
 ; ===========================================================================================================================
 ;
 
-spaces_to_null	proc	near
+convert_spaces_to_null	proc	near
 
 				mov		dx, 0							; Inicializar variáveis internas e de saída
 
@@ -448,20 +691,47 @@ spaces_to_null	proc	near
 				mov		al, _CHAR_SPACE
 				cld
 
-spaces_to_null_loop:
+convert_spaces_to_null_loop:
 				repne scasb								; Encontrar a próxima ocorrência de espaço na sentença
 
 				cmp		cx, 0							; Descobrir se a string terminou
-				je		spaces_to_null_return
+				je		convert_spaces_to_null_return
 
 				mov		[di - 1], ah					; Colocar nulo no lugar de espaço e 
 				inc		dx
-				jmp		spaces_to_null_loop
+				jmp		convert_spaces_to_null_loop
 
-spaces_to_null_return:
+convert_spaces_to_null_return:
 				ret
 
-spaces_to_null	endp
+convert_spaces_to_null	endp
+
+;
+; ===========================================================================================================================
+; DS:BX find_end_of_string(DS:BX)
+; ===========================================================================================================================
+;
+; Função que encontra o marcador final de uma string:
+;
+; Entrada: DS:BX - Ponteiro para o início da string;
+; Saída:   DS:BX - Ponteiro para o final da string ('\0').
+;
+; ===========================================================================================================================
+;
+
+find_end_of_string	proc	near
+
+find_end_of_string_loop:
+				cmp		[bx], byte ptr _CHAR_NULL			; Encontrar final de uma string ('\0')
+				je		find_end_of_string_return
+
+				inc		bx
+				jmp		find_end_of_string_loop
+
+find_end_of_string_return:
+				ret
+
+find_end_of_string	endp
 
 ;
 ; ===========================================================================================================================
@@ -512,14 +782,43 @@ not_insuficient_psp_error:
 				cmp		error_code, _ERROR_INVALID_PSP
 				jne		not_invalid_psp_error
 
-														; Tratar erro de opções de entrada inválidas
+				lea		bx, error_invalid_psp_msg		; Escrever o erro e a opção de entrada inválida
+				call	printf_s
+				lea		bx, error_string1
+				call	printf_s
+				lea		bx, error_invalid_msg_a
+				call	printf_s
+
 				jmp		error_handler_return
 
 not_invalid_psp_error:
 				cmp		error_code, _ERROR_INVALID_PSP_PARAM
 				jne		not_invalid_psp_param_error
 
-														; Tratar erro de parâmetros de opções de entrada inválidos
+				cmp		[error_string2], byte ptr _CHAR_NULL; Julgar se faltou ou se houve parâmetro inválido
+				jne		not_empty_psp_param_error
+
+				lea		bx, error_invalid_psp_param_msgv	; Escrever o erro e a opção entrada inválida (faltando parâmetro)
+				call	printf_s
+				lea		bx, error_string1
+				call	printf_s
+				lea		bx, error_inexistent_msg
+				call	printf_s
+
+				jmp		error_handler_return
+
+not_empty_psp_param_error:
+				lea		bx, error_invalid_psp_param_msg1	; Escrever o erro, a opção e o parâmetro de entrada inválidos
+				call	printf_s
+				lea		bx, error_string1
+				call	printf_s
+				lea		bx, error_invalid_psp_param_msg2
+				call	printf_s
+				lea		bx, error_string2
+				call	printf_s
+				lea		bx, error_invalid_msg_o
+				call	printf_s
+
 				jmp		error_handler_return
 
 not_invalid_psp_param_error:
