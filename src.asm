@@ -412,6 +412,20 @@ insuficient_options:
 				jmp		main_return						; Encerrar programa com erro
 
 mandatory_options_enabled:
+				lea		dx, filename_src				; Tentar abrir o arquivo de entrada
+				call	fopen
+				jnc		valid_filename
+
+				mov		error_code, _ERROR_FILENAME		; Indicar erro de nome do arquivo
+
+				lea		di, error_string1				; Guardar mensagens de erro a serem mostradas
+				lea		si, filename_src
+				call	strcpy
+
+				jmp		main_return						; Encerrar programa com erro
+
+valid_filename:
+				mov		filehandle_src, bx
 
 ; CÓDIGO TEMPORÁRIO DE TESTE
 				lea		bx, newline
@@ -433,6 +447,10 @@ mandatory_options_enabled:
 				call	sprintf_w
 				lea		bx, dna_group_size_string
 				call	printf_s
+;
+
+				mov		bx, filehandle_src				; Fechar arquivo de entrada
+				call	fclose
 
 main_return:
 				call	error_handler
@@ -882,7 +900,13 @@ error_handler	proc	near
 				cmp		error_code, _ERROR_FILENAME
 				jne		not_filename_error
 
-														; Tratar erro de nome de arquivo
+				lea		bx, error_filename_msg			; Escrever o erro e o nome do arquivo inválido
+				call	printf_s
+				lea		bx, error_string1
+				call	printf_s
+				lea		bx, error_invalid_msg_o
+				call	printf_s
+
 				jmp		error_handler_return
 
 not_filename_error:
