@@ -222,7 +222,7 @@ valid_param_f:
 
 				dec		psp_string_segments				; Descontar um segmento no contador
 
-				jmp		segment_increment_skip
+				jmp		segment_increment
 
 not_option_f:
 				cmp		[bp], byte ptr _CHAR_L_O		; Se for uma opção 'o'
@@ -265,7 +265,7 @@ valid_param_o:
 
 				dec		psp_string_segments				; Descontar um segmento no contador
 
-				jmp		segment_increment_skip
+				jmp		segment_increment
 
 not_option_o:
 				cmp		[bp], byte ptr _CHAR_L_N		; Se for uma opção 'n'
@@ -324,7 +324,7 @@ existent_param_n:
 
 				mov		psp_string_segment_cursor, bp	; Atualizar próximo segmento a ser analisado
 
-				jmp		segment_increment_skip
+				jmp		segment_increment
 
 invalid_param_n:
 				mov		error_code, _ERROR_INVALID_PSP_PARAM
@@ -377,7 +377,7 @@ option_atcg_loop_increment:
 				jne		option_atcg_loop
 
 				mov		psp_string_segment_cursor, bp	; Atualizar próximo segmento a ser analisado
-				jmp		segment_increment_skip
+				jmp		segment_increment
 
 unknown_option:
 				mov		error_code, _ERROR_INVALID_PSP	; Atribuir respectivo código de erro
@@ -397,7 +397,7 @@ unknown_string:
 
 				jmp		main_return						; Encerrar programa com erro	
 
-segment_increment_skip:
+segment_increment:
 				cmp		psp_string_segments, 0			; Continuar loop até percorrer todos segmentos
 				jne		input_loop
 
