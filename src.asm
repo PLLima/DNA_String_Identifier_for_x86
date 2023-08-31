@@ -323,7 +323,6 @@ existent_param_n:
 				jmp		segment_increment_skip
 
 invalid_param_n:
-
 				mov		error_code, _ERROR_INVALID_PSP_PARAM
 
 				lea		di, error_string1				; Guardar mensagens de erro a serem mostradas
@@ -368,9 +367,19 @@ not_option_c:
 
 not_option_g:
 				cmp		[bp], byte ptr _CHAR_PLUS		; Se for uma opção '+'
-				jne		segment_increment
+				jne		unknown_option
 
 
+				jmp		segment_increment
+
+unknown_option:
+				mov		error_code, _ERROR_INVALID_PSP	; Atribuir respectivo código de erro
+
+				lea		di, error_string1				; Guardar mensagem de erro a ser mostrada
+				mov		si, psp_string_segment_cursor
+				call	strcpy
+
+				jmp		main_return						; Encerrar programa com erro
 
 segment_increment:
 				mov		bx, bp							; Encontrar o final do segmento atual
