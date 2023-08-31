@@ -50,7 +50,8 @@ _BASE_10					equ				10					; Base Numérica 10
 
 _SINGLE_BYTE				equ				1					; 1 Byte
 
-_MAX_FILENAME				equ				256					; Tamanho máximo de nome de arquivo
+_MIN_DNA_GROUP_SIZE			equ				1					; Tamanhos mínimo e máximo de grupos de DNA
+_MAX_DNA_GROUP_SIZE			equ				10000
 
 ; Tabela de Códigos de Erro
 
@@ -90,6 +91,9 @@ filename_dst				db				256 dup (?)
 filehandle_src				dw				0					; Handles dos arquivo de entrada e saída
 filehandle_dst				dw				0
 
+dna_group_size				dw				0					; Tamanho de cada grupo de bases de DNA
+dna_group_size_string		db				256 dup (?)			; String com o tamanho de cada grupo de bases
+
 ; Strings Constantes
 null_msg					db				_CHAR_NULL
 newline						db				_CHAR_CR, _CHAR_LF, _CHAR_NULL
@@ -118,7 +122,7 @@ error_insuficient_psp_msg2	db				'".', _CHAR_CR, _CHAR_LF, _CHAR_NULL
 error_invalid_psp_msg		db				_CHAR_CR, _CHAR_LF, 'Erro 05: opcao de entrada "', _CHAR_NULL
 error_invalid_psp_param_msg1 db				_CHAR_CR, _CHAR_LF, 'Erro 06: parametro "', _CHAR_NULL
 error_invalid_psp_param_msg2 db				'" da opcao "', _CHAR_NULL
-error_invalid_psp_param_msgv db				_CHAR_CR, _CHAR_LF, 'Erro 06: parametro inexiste da opcao "', _CHAR_NULL
+error_invalid_psp_param_msgv db				_CHAR_CR, _CHAR_LF, 'Erro 06: parametro da opcao "', _CHAR_NULL
 error_invalid_char_msg1		db				_CHAR_CR, _CHAR_LF, 'Erro 07: caractere "', _CHAR_NULL
 error_invalid_char_msg2		db				'" do arquivo na linha "', _CHAR_NULL
 
@@ -142,6 +146,7 @@ error_invalid_char_msg2		db				'" do arquivo na linha "', _CHAR_NULL
 				mov		option_t, _DISABLED
 				mov		psp_string_segment_cursor, offset psp_string
 				mov		psp_string_segments, 0
+				mov		dna_group_size, 0
 
 				lea		bx, psp_string					; Copiar string de entrada do programa
 				call	copy_psp_s
@@ -201,7 +206,7 @@ valid_option_f:
 				jmp		main_return						; Encerrar programa com erro
 
 valid_param_f:
-				mov		option_f, _ENABLED				; Habilitar opção f
+				mov		option_f, _ENABLED				; Habilitar opção 'f'
 
 				inc		bp
 				mov		si, bp							; Copiar string com o nome de arquivo
@@ -246,7 +251,7 @@ valid_option_o:
 				jmp		main_return						; Encerrar programa com erro
 
 valid_param_o:
-				mov		option_o, _ENABLED				; Habilitar opção f
+				mov		option_o, _ENABLED				; Habilitar opção 'o'
 
 				inc		bp
 				mov		si, bp							; Copiar string com o nome de arquivo
@@ -293,33 +298,45 @@ valid_option_n:
 existent_param_n:
 				inc		bp
 
-				cmp		psp_string_segments, 0			; Avaliar se há valido parâmetro a ser processado
-				jne		existent_param_n
+				lea		di, dna_group_size_string		; Adquire a informação do tamanho dos grupos de DNA (se válido)
+				mov		si, bp							; Como string
+				call	strcpy
+				mov		bp, si
+
+				lea		bx, dna_group_size_string		; E como número
+				call	atoi
+				mov		dna_group_size, ax
+
+				dec		psp_string_segments				; Descontar um segmento no contador
+
+				cmp		dna_group_size, _INVALID_NUMBER	; Avaliar se há parâmetro válido a ser processado
+				je		invalid_param_n
+				cmp		dna_group_size, _MIN_DNA_GROUP_SIZE
+				jb		invalid_param_n
+				cmp		dna_group_size, _MAX_DNA_GROUP_SIZE
+				ja		invalid_param_n
+
+				mov		option_n, _ENABLED				; Habilitar opção 'n' quando há parâmetro válido
+
+				mov		psp_string_segment_cursor, bp	; Atualizar próximo segmento a ser analisado
+
+				jmp		segment_increment_skip
+
+invalid_param_n:
 
 				mov		error_code, _ERROR_INVALID_PSP_PARAM
 
 				lea		di, error_string1				; Guardar mensagens de erro a serem mostradas
-				mov		si, psp_string_segment_cursor
+				lea		si, dna_group_size_string
 				call	strcpy
 
 				lea		di, error_string2
-				lea		si, null_msg
+				mov		si, psp_string_segment_cursor
 				call	strcpy
+
+				mov		psp_string_segment_cursor, bp	; Atualizar próximo segmento a ser analisado
 
 				jmp		main_return						; Encerrar programa com erro
-
-valid_param_n:
-				mov		option_n, _ENABLED				; Habilitar opção f
-
-				inc		bp
-				mov		si, bp							; Copiar string com o nome de arquivo
-				lea		di, filename_dst
-				call	strcpy
-				mov		psp_string_segment_cursor, si	; Atualizar apontador de segmentos
-
-				dec		psp_string_segments				; Descontar um segmento no contador
-
-				jmp		segment_increment
 
 not_option_n:
 				cmp		[bp], byte ptr _CHAR_L_A		; Se for uma opção 'a'
@@ -372,6 +389,13 @@ segment_increment_skip:
 				call	printf_s
 				lea		bx, filename_dst
 				call	printf_s
+				lea		bx, newline
+				call	printf_s
+				lea		bx, dna_group_size_string
+				mov		ax, dna_group_size
+				call	sprintf_w
+				lea		bx, dna_group_size_string
+				call	printf_s
 
 main_return:
 				call	error_handler
@@ -400,18 +424,14 @@ atoi			proc 	near
 				mov		ax, 0
 
 atoi_loop:
-				cmp		byte ptr [bx], _CHAR_NULL		; Testar se o caractere é nulo '\0'
+				cmp		[bx], byte ptr _CHAR_NULL		; Testar se o caractere é nulo '\0'
 				jz		atoi_return
 
-				cmp		byte ptr [bx], _CHAR_ZERO		; Testar se o caractere é um número natural
-				jae		atoi_valid_char
-				cmp		byte ptr [bx], _CHAR_NINE
-				jbe		atoi_valid_char
+				cmp		[bx], byte ptr _CHAR_ZERO		; Testar se o caractere é um número natural
+				jb		atoi_invalid_char
+				cmp		[bx], byte ptr _CHAR_NINE
+				ja		atoi_invalid_char
 
-				mov		ax, _INVALID_NUMBER				; Caso não seja válido, retornar erro
-				jmp		atoi_return
-
-atoi_valid_char:
 				mov		cx, _BASE_10					; Calcular valor posicional do número
 				mul		cx
 				mov		ch, 0
@@ -421,6 +441,9 @@ atoi_valid_char:
 
 				inc		bx								; Incrementar a posição no string
 				jmp		atoi_loop						; Continuar loop
+
+atoi_invalid_char:
+				mov		ax, _INVALID_NUMBER				; Caso não seja válido, retornar erro
 
 atoi_return:
 				ret										; Encerrar função
@@ -482,11 +505,11 @@ sprintf_w_continue:
 
 				cmp		sprintf_w_f, 0					; Colocar caracteres zeros quando f for nulo
 				jnz		sprintf_w_return
-				mov		[bx], _CHAR_ZERO
+				mov		[bx], byte ptr _CHAR_ZERO
 				inc		bx
 
 sprintf_w_return:
-				mov		byte ptr[bx], _CHAR_NULL		; Colocar caractere de fim de string
+				mov		[bx], byte ptr _CHAR_NULL		; Colocar caractere de fim de string
 
 				pop		bp								; Retornar valor de bp
 
