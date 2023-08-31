@@ -33,6 +33,7 @@ _CHAR_SPACE					equ				20h					; Caracteres Visíveis
 _CHAR_PLUS					equ				2Bh
 _CHAR_MINUS					equ				2Dh
 _CHAR_ZERO					equ				30h
+_CHAR_NINE					equ				39h
 _CHAR_U_A					equ				41h
 _CHAR_L_A					equ				61h
 _CHAR_U_C					equ				43h
