@@ -265,7 +265,7 @@ valid_param_o:
 
 not_option_o:
 				cmp		[bp], byte ptr _CHAR_L_N		; Se for uma opção 'n'
-				jne		not_option_n
+				jne		option_atcg_loop
 
 				inc		bp
 				cmp		[bp], byte ptr _CHAR_NULL		; Descobrir se é uma opção válida
@@ -337,40 +337,42 @@ invalid_param_n:
 
 				jmp		main_return						; Encerrar programa com erro
 
-not_option_n:
-				cmp		[bp], byte ptr _CHAR_L_A		; Se for uma opção 'a'
-				jne		not_option_a
+option_atcg_loop:
+				cmp		[bp], byte ptr _CHAR_L_A		; Se for uma opção 'a' ou 't' ou 'c' ou 'g' ou '+'
+				je		enable_option_a
+				cmp		[bp], byte ptr _CHAR_L_T
+				je		enable_option_t
+				cmp		[bp], byte ptr _CHAR_L_C
+				je		enable_option_c
+				cmp		[bp], byte ptr _CHAR_L_G
+				je		enable_option_g
+				cmp		[bp], byte ptr _CHAR_PLUS
+				je		enable_option_plus
 
+				jmp		unknown_option					; Se houver algum caractere inválido, retornar erro
 
-				jmp		segment_increment
+enable_option_a:										; Habilitar as respectivas opções
+				mov		option_a, _ENABLED
+				jmp		option_atcg_loop_increment
+enable_option_t:
+				mov		option_t, _ENABLED
+				jmp		option_atcg_loop_increment
+enable_option_c:
+				mov		option_c, _ENABLED
+				jmp		option_atcg_loop_increment
+enable_option_g:
+				mov		option_t, _ENABLED
+				jmp		option_atcg_loop_increment
+enable_option_plus:
+				mov		option_plus, _ENABLED
+				jmp		option_atcg_loop_increment
 
-not_option_a:
-				cmp		[bp], byte ptr _CHAR_L_T		; Se for uma opção 't'
-				jne		not_option_t
+option_atcg_loop_increment:
+				inc		bp
+				cmp		[bp], byte ptr _CHAR_NULL
+				jne		option_atcg_loop
 
-
-				jmp		segment_increment
-
-not_option_t:
-				cmp		[bp], byte ptr _CHAR_L_C		; Se for uma opção 'c'
-				jne		not_option_c
-
-
-				jmp		segment_increment
-
-not_option_c:
-				cmp		[bp], byte ptr _CHAR_L_G		; Se for uma opção 'g'
-				jne		not_option_g
-
-
-				jmp		segment_increment
-
-not_option_g:
-				cmp		[bp], byte ptr _CHAR_PLUS		; Se for uma opção '+'
-				jne		unknown_option
-
-
-				jmp		segment_increment
+				jmp		segment_increment_skip
 
 unknown_option:
 				mov		error_code, _ERROR_INVALID_PSP	; Atribuir respectivo código de erro
@@ -390,6 +392,7 @@ segment_increment_skip:
 				cmp		psp_string_segments, 0			; Continuar loop até percorrer todos segmentos
 				jne		input_loop
 
+; CÓDIGO TEMPORÁRIO DE TESTE
 				lea		bx, newline
 				call	printf_s
 				lea		bx, filename_src
@@ -397,6 +400,10 @@ segment_increment_skip:
 				lea		bx, newline
 				call	printf_s
 				lea		bx, filename_dst
+				call	printf_s
+				lea		bx, newline
+				call	printf_s
+				lea		bx, dna_group_size_string
 				call	printf_s
 				lea		bx, newline
 				call	printf_s
