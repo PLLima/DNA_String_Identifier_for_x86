@@ -23,6 +23,8 @@
 _ENABLED					equ				1					; Habilitado/Desabilitado
 _DISABLED					equ				0
 
+_INVALID_NUMBER				equ				0FFFFh				; Número Inválido
+
 _CHAR_NULL					equ				0					; Caracteres Especiais
 _CHAR_CR					equ				0Dh
 _CHAR_LF					equ				0Ah             
@@ -182,8 +184,6 @@ input_loop:
 				jmp		main_return						; Encerrar programa com erro
 
 valid_option_f:
-				mov		option_f, _ENABLED				; Habilitar opção f
-
 				cmp		psp_string_segments, 0			; Avaliar se há parâmetro a ser processado
 				jne		valid_param_f
 
@@ -200,6 +200,8 @@ valid_option_f:
 				jmp		main_return						; Encerrar programa com erro
 
 valid_param_f:
+				mov		option_f, _ENABLED				; Habilitar opção f
+
 				inc		bp
 				mov		si, bp							; Copiar string com o nome de arquivo
 				lea		di, filename_src
@@ -227,8 +229,6 @@ not_option_f:
 				jmp		main_return						; Encerrar programa com erro
 
 valid_option_o:
-				mov		option_o, _ENABLED				; Habilitar opção f
-
 				cmp		psp_string_segments, 0			; Avaliar se há parâmetro a ser processado
 				jne		valid_param_o
 
@@ -245,6 +245,8 @@ valid_option_o:
 				jmp		main_return						; Encerrar programa com erro
 
 valid_param_o:
+				mov		option_o, _ENABLED				; Habilitar opção f
+
 				inc		bp
 				mov		si, bp							; Copiar string com o nome de arquivo
 				lea		di, filename_dst
@@ -256,42 +258,98 @@ valid_param_o:
 				jmp		segment_increment_skip
 
 not_option_o:
-				cmp		[bp], byte ptr _CHAR_L_N					; Se for uma opção 'n'
+				cmp		[bp], byte ptr _CHAR_L_N		; Se for uma opção 'n'
 				jne		not_option_n
 
+				inc		bp
+				cmp		[bp], byte ptr _CHAR_NULL		; Descobrir se é uma opção válida
+				je		valid_option_n
+
+				mov		error_code, _ERROR_INVALID_PSP	; Atribuir respectivo código de erro
+
+				lea		di, error_string1				; Guardar mensagem de erro a ser mostrada
+				mov		si, psp_string_segment_cursor
+				call	strcpy
+
+				jmp		main_return						; Encerrar programa com erro
+
+valid_option_n:
+				cmp		psp_string_segments, 0			; Avaliar se há valido parâmetro a ser processado
+				jne		existent_param_n
+
+				mov		error_code, _ERROR_INVALID_PSP_PARAM
+
+				lea		di, error_string1				; Guardar mensagens de erro a serem mostradas
+				mov		si, psp_string_segment_cursor
+				call	strcpy
+
+				lea		di, error_string2
+				lea		si, null_msg
+				call	strcpy
+
+				jmp		main_return						; Encerrar programa com erro
+
+existent_param_n:
+				inc		bp
+
+				cmp		psp_string_segments, 0			; Avaliar se há valido parâmetro a ser processado
+				jne		existent_param_n
+
+				mov		error_code, _ERROR_INVALID_PSP_PARAM
+
+				lea		di, error_string1				; Guardar mensagens de erro a serem mostradas
+				mov		si, psp_string_segment_cursor
+				call	strcpy
+
+				lea		di, error_string2
+				lea		si, null_msg
+				call	strcpy
+
+				jmp		main_return						; Encerrar programa com erro
+
+valid_param_n:
+				mov		option_n, _ENABLED				; Habilitar opção f
+
+				inc		bp
+				mov		si, bp							; Copiar string com o nome de arquivo
+				lea		di, filename_dst
+				call	strcpy
+				mov		psp_string_segment_cursor, si	; Atualizar apontador de segmentos
+
+				dec		psp_string_segments				; Descontar um segmento no contador
 
 				jmp		segment_increment
 
 not_option_n:
-				cmp		[bp], byte ptr _CHAR_L_A					; Se for uma opção 'a'
+				cmp		[bp], byte ptr _CHAR_L_A		; Se for uma opção 'a'
 				jne		not_option_a
 
 
 				jmp		segment_increment
 
 not_option_a:
-				cmp		[bp], byte ptr _CHAR_L_T					; Se for uma opção 't'
+				cmp		[bp], byte ptr _CHAR_L_T		; Se for uma opção 't'
 				jne		not_option_t
 
 
 				jmp		segment_increment
 
 not_option_t:
-				cmp		[bp], byte ptr _CHAR_L_C					; Se for uma opção 'c'
+				cmp		[bp], byte ptr _CHAR_L_C		; Se for uma opção 'c'
 				jne		not_option_c
 
 
 				jmp		segment_increment
 
 not_option_c:
-				cmp		[bp], byte ptr _CHAR_L_G					; Se for uma opção 'g'
+				cmp		[bp], byte ptr _CHAR_L_G		; Se for uma opção 'g'
 				jne		not_option_g
 
 
 				jmp		segment_increment
 
 not_option_g:
-				cmp		[bp], byte ptr _CHAR_PLUS				; Se for uma opção '+'
+				cmp		[bp], byte ptr _CHAR_PLUS		; Se for uma opção '+'
 				jne		segment_increment
 
 
@@ -331,7 +389,7 @@ main_return:
 ; Função que converte uma string para um valor hexadecimal:
 ;
 ; Entrada: DS:BX - Ponteiro para o início da string de origem;
-; Saída:   AX    - Valor hexadecimal/decimal resultante.
+; Saída:   AX    - Valor hexadecimal/decimal resultante ou 65535 se for um número inválido.
 ;
 ; ===========================================================================================================================
 ;
@@ -341,9 +399,18 @@ atoi			proc 	near
 				mov		ax, 0
 
 atoi_loop:
-				cmp		byte ptr[bx], _CHAR_NULL		; Testar se o caractere é nulo '\0'
+				cmp		byte ptr [bx], _CHAR_NULL		; Testar se o caractere é nulo '\0'
 				jz		atoi_return
 
+				cmp		byte ptr [bx], _CHAR_ZERO		; Testar se o caractere é um número natural
+				jae		atoi_valid_char
+				cmp		byte ptr [bx], _CHAR_NINE
+				jbe		atoi_valid_char
+
+				mov		ax, _INVALID_NUMBER				; Caso não seja válido, retornar erro
+				jmp		atoi_return
+
+atoi_valid_char:
 				mov		cx, _BASE_10					; Calcular valor posicional do número
 				mul		cx
 				mov		ch, 0
