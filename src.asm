@@ -61,8 +61,10 @@ _ERROR_SMALL_FILESIZE		equ				2					; Caracteres no arquivo menor que o valor de
 _ERROR_BIG_FILESIZE			equ				3					; Mais que 10.000 caracteres no arquivo
 _ERROR_INSUFICIENT_PSP		equ				4					; String de entrada incompleta (faltando opções)
 _ERROR_INVALID_PSP			equ				5					; String de entrada inválida (opções '-xXx' incorretas)
-_ERROR_INVALID_PSP_PARAM	equ				6					; String de entrada inválida (parâmetros de opções incorretos)
-_ERROR_INVALID_CHAR			equ				7					; Caractere inválido no arquivo de entrada
+_ERROR_DUPLICATE_PSP		equ				6					; String de entrada com opção duplicada
+_ERROR_INVALID_PSP_PARAM	equ				7					; String de entrada inválida (parâmetros de opções incorretos)
+_ERROR_INVALID_CHAR			equ				8					; Caractere inválido no arquivo de entrada
+_ERROR_UNKNOWN				equ				9					; Erro desconhecido
 
 ;
 ; ===========================================================================================================================
@@ -112,6 +114,7 @@ error_string2				db				256 dup (?)
 error_invalid_msg_o			db				'" invalido.', _CHAR_CR, _CHAR_LF, _CHAR_NULL
 error_invalid_msg_a			db				'" invalida.', _CHAR_CR, _CHAR_LF, _CHAR_NULL
 error_inexistent_msg		db				'" inexistente.', _CHAR_CR, _CHAR_LF, _CHAR_NULL
+error_duplicate_msg			db				'" duplicada.', _CHAR_CR, _CHAR_LF, _CHAR_NULL
 error_option_f_msg			db				' -f', _CHAR_NULL
 error_option_n_msg			db				' -n', _CHAR_NULL
 error_option_atcg_msg		db				' -atcg+', _CHAR_NULL
@@ -122,11 +125,13 @@ error_big_filesize_msg		db				_CHAR_CR, _CHAR_LF, 'Erro 03: arquivo muito grande
 error_insuficient_psp_msg1	db				_CHAR_CR, _CHAR_LF, 'Erro 04: opcoes de entrada insuficientes. Faltam as opcoes "', _CHAR_NULL
 error_insuficient_psp_msg2	db				' ".', _CHAR_CR, _CHAR_LF, _CHAR_NULL
 error_invalid_psp_msg		db				_CHAR_CR, _CHAR_LF, 'Erro 05: opcao de entrada "', _CHAR_NULL
-error_invalid_psp_param_msg1 db				_CHAR_CR, _CHAR_LF, 'Erro 06: parametro "', _CHAR_NULL
+error_duplicate_psp_msg		db				_CHAR_CR, _CHAR_LF, 'Erro 06: opcao de entrada "', _CHAR_NULL				
+error_invalid_psp_param_msg1 db				_CHAR_CR, _CHAR_LF, 'Erro 07: parametro "', _CHAR_NULL
 error_invalid_psp_param_msg2 db				'" da opcao "', _CHAR_NULL
-error_invalid_psp_param_msgv db				_CHAR_CR, _CHAR_LF, 'Erro 06: parametro da opcao "', _CHAR_NULL
-error_invalid_char_msg1		db				_CHAR_CR, _CHAR_LF, 'Erro 07: caractere "', _CHAR_NULL
+error_invalid_psp_param_msgv db				_CHAR_CR, _CHAR_LF, 'Erro 07: parametro da opcao "', _CHAR_NULL
+error_invalid_char_msg1		db				_CHAR_CR, _CHAR_LF, 'Erro 08: caractere "', _CHAR_NULL
 error_invalid_char_msg2		db				'" do arquivo na linha "', _CHAR_NULL
+error_unknown_msg			db				_CHAR_CR, _CHAR_LF, 'Erro desconhecido.', _CHAR_CR, _CHAR_LF, _CHAR_NULL
 
 ;
 ; ===========================================================================================================================
@@ -171,7 +176,7 @@ input_loop:
 				mov		bp, psp_string_segment_cursor
 
 				cmp		[bp], byte ptr _CHAR_MINUS		; Verificar se o caractere comparado é um hífen
-				jne		segment_increment
+				jne		unknown_string
 
 				inc		bp								; Se for um hífen, verificar próximos caracteres
 
@@ -383,10 +388,14 @@ unknown_option:
 
 				jmp		main_return						; Encerrar programa com erro
 
-segment_increment:
-				mov		bx, bp							; Encontrar o final do segmento atual
-				call	find_end_of_string
-				mov		psp_string_segment_cursor, bx
+unknown_string:
+				mov		error_code, _ERROR_UNKNOWN		; Atribuir respectivo código de erro
+
+				lea		di, error_string1				; Guardar mensagem de erro a ser mostrada
+				mov		si, psp_string_segment_cursor
+				call	strcpy
+
+				jmp		main_return						; Encerrar programa com erro	
 
 segment_increment_skip:
 				cmp		psp_string_segments, 0			; Continuar loop até percorrer todos segmentos
@@ -978,13 +987,26 @@ not_insuficient_psp_error:
 				jmp		error_handler_return
 
 not_invalid_psp_error:
+				cmp		error_code, _ERROR_DUPLICATE_PSP
+				jne		not_duplicate_psp_error
+
+				lea		bx, error_duplicate_psp_msg		; Escrever o erro e a opção de entrada duplicada
+				call	printf_s
+				lea		bx, error_string1
+				call	printf_s
+				lea		bx, error_duplicate_msg
+				call	printf_s
+
+				jmp		error_handler_return
+
+not_duplicate_psp_error:
 				cmp		error_code, _ERROR_INVALID_PSP_PARAM
 				jne		not_invalid_psp_param_error
 
 				cmp		[error_string2], byte ptr _CHAR_NULL; Julgar se faltou ou se houve parâmetro inválido
 				jne		not_empty_psp_param_error
 
-				lea		bx, error_invalid_psp_param_msgv	; Escrever o erro e a opção entrada inválida (faltando parâmetro)
+				lea		bx, error_invalid_psp_param_msgv; Escrever o erro e a opção entrada inválida (faltando parâmetro)
 				call	printf_s
 				lea		bx, error_string1
 				call	printf_s
@@ -994,7 +1016,7 @@ not_invalid_psp_error:
 				jmp		error_handler_return
 
 not_empty_psp_param_error:
-				lea		bx, error_invalid_psp_param_msg1	; Escrever o erro, a opção e o parâmetro de entrada inválidos
+				lea		bx, error_invalid_psp_param_msg1; Escrever o erro, a opção e o parâmetro de entrada inválidos
 				call	printf_s
 				lea		bx, error_string1
 				call	printf_s
@@ -1009,9 +1031,17 @@ not_empty_psp_param_error:
 
 not_invalid_psp_param_error:
 				cmp		error_code, _ERROR_INVALID_CHAR
-				jne		error_handler_return
+				jne		not_invalid_char_error
 
 														; Tratar erro de parâmetros de caractere inválido no arquivo
+				jmp		error_handler_return
+
+not_invalid_char_error:
+				cmp		error_code, _ERROR_UNKNOWN
+				jne		error_handler_return
+
+				lea		bx, error_unknown_msg			; Escrever o erro desconhecido
+				call	printf_s
 
 error_handler_return:
 				ret
