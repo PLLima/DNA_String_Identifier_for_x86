@@ -82,7 +82,6 @@ option_c					db				?
 option_f					db				?
 option_g					db				?
 option_n					db				?
-option_o					db				?
 option_plus					db				?
 option_t					db				?
 
@@ -113,12 +112,15 @@ error_string2				db				256 dup (?)
 error_invalid_msg_o			db				'" invalido.', _CHAR_CR, _CHAR_LF, _CHAR_NULL
 error_invalid_msg_a			db				'" invalida.', _CHAR_CR, _CHAR_LF, _CHAR_NULL
 error_inexistent_msg		db				'" inexistente.', _CHAR_CR, _CHAR_LF, _CHAR_NULL
+error_option_f_msg			db				' -f', _CHAR_NULL
+error_option_n_msg			db				' -n', _CHAR_NULL
+error_option_atcg_msg		db				' -atcg+', _CHAR_NULL
 error_filename_msg			db				_CHAR_CR, _CHAR_LF, 'Erro 01: nome de arquivo "', _CHAR_NULL
 error_small_filesize_msg1	db				_CHAR_CR, _CHAR_LF, 'Erro 02: arquivo muito pequeno. Necessario minimo de ', _CHAR_NULL
 error_small_filesize_msg2	db				' caracteres no arquivo.', _CHAR_CR, _CHAR_LF, _CHAR_NULL
 error_big_filesize_msg		db				_CHAR_CR, _CHAR_LF, 'Erro 03: arquivo muito grande. Numero maximo de caracteres aceitos eh 10.000.', _CHAR_CR, _CHAR_LF, _CHAR_NULL
 error_insuficient_psp_msg1	db				_CHAR_CR, _CHAR_LF, 'Erro 04: opcoes de entrada insuficientes. Faltam as opcoes "', _CHAR_NULL
-error_insuficient_psp_msg2	db				'".', _CHAR_CR, _CHAR_LF, _CHAR_NULL
+error_insuficient_psp_msg2	db				' ".', _CHAR_CR, _CHAR_LF, _CHAR_NULL
 error_invalid_psp_msg		db				_CHAR_CR, _CHAR_LF, 'Erro 05: opcao de entrada "', _CHAR_NULL
 error_invalid_psp_param_msg1 db				_CHAR_CR, _CHAR_LF, 'Erro 06: parametro "', _CHAR_NULL
 error_invalid_psp_param_msg2 db				'" da opcao "', _CHAR_NULL
@@ -141,7 +143,6 @@ error_invalid_char_msg2		db				'" do arquivo na linha "', _CHAR_NULL
 				mov		option_f, _DISABLED
 				mov		option_g, _DISABLED
 				mov		option_n, _DISABLED
-				mov		option_o, _DISABLED
 				mov		option_plus, _DISABLED
 				mov		option_t, _DISABLED
 				mov		psp_string_segment_cursor, offset psp_string
@@ -251,8 +252,6 @@ valid_option_o:
 				jmp		main_return						; Encerrar programa com erro
 
 valid_param_o:
-				mov		option_o, _ENABLED				; Habilitar opção 'o'
-
 				inc		bp
 				mov		si, bp							; Copiar string com o nome de arquivo
 				lea		di, filename_dst
@@ -372,6 +371,7 @@ option_atcg_loop_increment:
 				cmp		[bp], byte ptr _CHAR_NULL
 				jne		option_atcg_loop
 
+				mov		psp_string_segment_cursor, bp	; Atualizar próximo segmento a ser analisado
 				jmp		segment_increment_skip
 
 unknown_option:
@@ -391,6 +391,27 @@ segment_increment:
 segment_increment_skip:
 				cmp		psp_string_segments, 0			; Continuar loop até percorrer todos segmentos
 				jne		input_loop
+
+				cmp		option_f, _ENABLED				; Descobrir se todas as opções obrigatórias foram especificadas
+				jne		insuficient_options				; Equivalente à Se [f E n E (a OU t OU c OU g OU +)]
+				cmp		option_n, _ENABLED
+				jne		insuficient_options
+				cmp		option_a, _ENABLED
+				je		mandatory_options_enabled
+				cmp		option_t, _ENABLED
+				je		mandatory_options_enabled
+				cmp		option_c, _ENABLED
+				je		mandatory_options_enabled
+				cmp		option_g, _ENABLED
+				je		mandatory_options_enabled
+				cmp		option_plus, _ENABLED
+				je		mandatory_options_enabled
+
+insuficient_options:
+				mov		error_code, _ERROR_INSUFICIENT_PSP
+				jmp		main_return						; Encerrar programa com erro
+
+mandatory_options_enabled:
 
 ; CÓDIGO TEMPORÁRIO DE TESTE
 				lea		bx, newline
@@ -882,7 +903,41 @@ not_big_filesize_error:
 				cmp		error_code, _ERROR_INSUFICIENT_PSP
 				jne		not_insuficient_psp_error
 
-														; Tratar erro de string de entrada insuficiente
+				lea		bx, error_insuficient_psp_msg1	; Tratar erro de string de entrada insuficiente
+				call	printf_s
+
+				cmp		option_f, _DISABLED				; Julgar quais parâmetros estão faltando
+				jne		option_f_enabled
+
+				lea		bx, error_option_f_msg
+				call	printf_s
+
+option_f_enabled:
+				cmp		option_n, _DISABLED
+				jne		option_n_enabled
+				
+				lea		bx, error_option_n_msg
+				call	printf_s
+
+option_n_enabled:
+				cmp		option_a, _DISABLED
+				jne		print_insuficient_options_end
+				cmp		option_t, _DISABLED
+				jne		print_insuficient_options_end
+				cmp		option_c, _DISABLED
+				jne		print_insuficient_options_end
+				cmp		option_g, _DISABLED
+				jne		print_insuficient_options_end
+				cmp		option_plus, _DISABLED
+				jne		print_insuficient_options_end
+
+				lea		bx, error_option_atcg_msg
+				call	printf_s
+
+print_insuficient_options_end:
+				lea		bx, error_insuficient_psp_msg2	; Finalizar mensagem de erro
+				call	printf_s
+
 				jmp		error_handler_return
 
 not_insuficient_psp_error:
