@@ -94,8 +94,7 @@ filename_dst				db				256 dup (?)
 filehandle_src				dw				0					; Handles dos arquivo de entrada e saída
 filehandle_dst				dw				0
 filechar					db				0, _CHAR_NULL		; Caractere lido do arquivo (com espaço para uma "string")
-last_filechar				db				0					; Caracteres lidos anteriormente no arquivo
-last_last_filechar			db				0
+filechar_newline			db				?					; Flag indicando leitura de linefeed no arquivo
 filelines					dw				0					; Quantidade de linhas do arquivo de entrada
 filelines_string			db				6 dup (?)			; String com a quantidade de linhas do arquivo de entrada	
 
@@ -131,9 +130,11 @@ error_option_f_msg			db				' -f', _CHAR_NULL
 error_option_n_msg			db				' -n', _CHAR_NULL
 error_option_atcg_msg		db				' -atcg+', _CHAR_NULL
 error_filename_msg			db				_CHAR_CR, _CHAR_LF, 'Erro 01: nome de arquivo "', _CHAR_NULL
-error_small_filesize_msg1	db				_CHAR_CR, _CHAR_LF, 'Erro 02: arquivo muito pequeno. Necessario minimo de ', _CHAR_NULL
-error_small_filesize_msg2	db				' caracteres no arquivo.', _CHAR_CR, _CHAR_LF, _CHAR_NULL
-error_big_filesize_msg		db				_CHAR_CR, _CHAR_LF, 'Erro 03: arquivo muito grande. Numero maximo de caracteres aceitos eh 10.000.', _CHAR_CR, _CHAR_LF, _CHAR_NULL
+error_small_filesize_msg1	db				_CHAR_CR, _CHAR_LF, 'Erro 02: arquivo "', _CHAR_NULL
+error_small_filesize_msg2	db				'" muito pequeno. Necessario minimo de "', _CHAR_NULL
+error_small_filesize_msg3	db				'" bases de DNA no arquivo.', _CHAR_CR, _CHAR_LF, _CHAR_NULL
+error_big_filesize_msg1		db				_CHAR_CR, _CHAR_LF, 'Erro 03: arquivo "', _CHAR_NULL
+error_big_filesize_msg2		db				'" muito grande. Numero maximo de bases de DNA aceitas eh 10.000.', _CHAR_CR, _CHAR_LF, _CHAR_NULL
 error_insuficient_psp_msg1	db				_CHAR_CR, _CHAR_LF, 'Erro 04: opcoes de entrada insuficientes. Faltam as opcoes "', _CHAR_NULL
 error_insuficient_psp_msg2	db				' ".', _CHAR_CR, _CHAR_LF, _CHAR_NULL
 error_invalid_psp_msg		db				_CHAR_CR, _CHAR_LF, 'Erro 05: opcao de entrada "', _CHAR_NULL
@@ -171,10 +172,10 @@ error_file_reading_msg3		db				'".', _CHAR_CR, _CHAR_LF, _CHAR_NULL
 				mov		psp_string_segment_cursor, offset psp_string
 				mov		psp_string_segments, 0
 				mov		dna_group_size, 0
+				mov		dna_group_amount, 0
+				mov		dna_base_amount, 0
 				mov		filelines, 1
-				mov		filechar, _CHAR_NULL
-				mov		last_filechar, _CHAR_NULL
-				mov		last_last_filechar, _CHAR_NULL
+				mov		filechar_newline, _DISABLED
 
 				lea		bx, psp_string					; Copiar string de entrada do programa
 				call	copy_psp_s
@@ -580,31 +581,23 @@ file_validation_loop:									; Loop de validação de arquivo de entrada
 				lea		si, filelines_string
 				call	strcpy
 
+				mov		bx, filehandle_src				; Fechar arquivo de entrada
+				call	fclose
+
 				jmp		main_return						; Encerrar programa com erro
 
 valid_file_reading:
-				cmp		ax, _SINGLE_BYTE				; Descobrir se há bytes a serem lidos no arquivo
+				cmp		ax, _SINGLE_BYTE				; Descobrir se ainda há bytes a serem lidos no arquivo
 				jne		file_validation_loop_end
 
-;IMPLEMENTAR CONTAGEM DE LINHAS VÁLIDAS NO ARQUIVO
-;				cmp		filechar, _CHAR_LF				; Verificar se houve nova linha no arquivo
-;				jne		not_file_newline
-;				cmp		last_last_filechar, _CHAR_U_A
-;				je		file_newline
-;				cmp		last_last_filechar, _CHAR_U_T
-;				je		file_newline
-;				cmp		last_last_filechar, _CHAR_U_C
-;				je		file_newline
-;				cmp		last_last_filechar, _CHAR_U_G
-;				je		file_newline
-;
-;				jmp		not_file_newline
-;
-;file_newline:
-;				inc		filelines
-;				jmp		file_validation_loop_increment
+				cmp		filechar, _CHAR_LF				; Verificar se houve nova linha no arquivo
+				jne		not_filechar_newline
 
-not_file_newline:
+				mov		filechar_newline, _ENABLED		; Habilitar flag de incremento de linhas
+
+				jmp		file_validation_loop
+
+not_filechar_newline:
 				cmp		filechar, _CHAR_U_A				; Validar se leu um caractere válido
 				je		valid_char
 				cmp		filechar, _CHAR_U_T
@@ -614,8 +607,15 @@ not_file_newline:
 				cmp		filechar, _CHAR_U_G
 				je		valid_char
 				cmp		filechar, _CHAR_CR
-				je		valid_char
+				je		file_validation_loop
 
+				cmp		filechar_newline, _ENABLED			; Confere se houve caractere inválido no início da linha
+				jne		no_line_increment_invalid_char
+
+				inc		filelines
+				mov		filechar_newline, _DISABLED
+
+no_line_increment_invalid_char:
 				mov		error_code, _ERROR_INVALID_CHAR	; Indicar erro de caractere inválido
 
 				lea		di, error_string1				; Guardar mensagens de erro a serem mostradas
@@ -629,25 +629,71 @@ not_file_newline:
 				mov		ax, filelines
 				lea		bx, filelines_string
 				call	sprintf_w
-				lea		di, error_string2
+				lea		di, error_string3
 				lea		si, filelines_string
 				call	strcpy
+
+				mov		bx, filehandle_src				; Fechar arquivo de entrada
+				call	fclose
 
 				jmp		main_return						; Encerrar programa com erro
 
 valid_char:
+				cmp		filechar_newline, _ENABLED			; Confere se houve quebra de linha
+				jne		no_line_increment_valid_char
 
+				inc		filelines
+				mov		filechar_newline, _DISABLED
 
-file_validation_loop_increment:
-				mov		ah, last_filechar				; Atualizar histórico de caracteres
-				mov		last_last_filechar, ah
+no_line_increment_valid_char:
+				inc		dna_base_amount					; Incrementar número de bases
 
-				mov		al, filechar
-				mov		last_filechar, al
-
-				jmp		file_validation_loop			; Continuar loop de validação de arquivo
+				jmp		file_validation_loop
 
 file_validation_loop_end:
+				mov		ax, dna_group_size
+				cmp		dna_base_amount, ax				; Validar tamanho do arquivo
+				jb		no_dna_groups
+				cmp		dna_base_amount, _MAX_DNA_GROUP_SIZE
+				ja		too_many_dna_bases
+
+				mov		dx, dna_base_amount				; Descobrir o número de grupos a serem processados
+				sub		dx, dna_group_size
+				inc		dx
+				mov		dna_group_amount, dx
+
+				jmp		file_validation_end
+
+no_dna_groups:
+				mov		error_code, _ERROR_SMALL_FILESIZE; Indicar erro de arquivo muito pequeno
+
+				lea		di, error_string1				; Guardar mensagens de erro a serem mostradas
+				lea		si, filename_src
+				call	strcpy
+
+				lea		di, error_string2
+				lea		si, dna_group_size_string
+				call	strcpy
+
+				mov		bx, filehandle_src				; Fechar arquivo de entrada
+				call	fclose
+
+				jmp		main_return						; Encerrar programa com erro
+
+too_many_dna_bases:
+				mov		error_code, _ERROR_BIG_FILESIZE	; Indicar erro de arquivo muito grande
+
+				lea		di, error_string1				; Guardar mensagens de erro a serem mostradas
+				lea		si, filename_src
+				call	strcpy
+
+				mov		bx, filehandle_src				; Fechar arquivo de entrada
+				call	fclose
+
+				jmp		main_return						; Encerrar programa com erro
+
+file_validation_end:
+
 
 ; CÓDIGO TEMPORÁRIO DE TESTE
 				lea		bx, newline
@@ -1135,14 +1181,30 @@ not_filename_error:
 				cmp		error_code, _ERROR_SMALL_FILESIZE
 				jne		not_small_filesize_error
 
-														; Tratar erro de arquivo muito pequeno
+				lea		bx, error_small_filesize_msg1	; Escrever o erro, o nome do arquivo e o tamanho mínimo do arquivo muito pequeno
+				call	printf_s
+				lea		bx, error_string1
+				call	printf_s
+				lea		bx, error_small_filesize_msg2
+				call	printf_s
+				lea		bx, error_string2
+				call	printf_s
+				lea		bx, error_small_filesize_msg3
+				call	printf_s
+
 				jmp		error_handler_return
 
 not_small_filesize_error:
 				cmp		error_code, _ERROR_BIG_FILESIZE
 				jne		not_big_filesize_error
 
-														; Tratar erro de arquivo muito grande
+				lea		bx, error_big_filesize_msg1		; Escrever o erro, o nome do arquivo e o tamanho máximo do arquivo muito grande
+				call	printf_s
+				lea		bx, error_string1
+				call	printf_s
+				lea		bx, error_big_filesize_msg2
+				call	printf_s
+
 				jmp		error_handler_return
 
 not_big_filesize_error:
