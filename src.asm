@@ -64,7 +64,7 @@ _ERROR_INVALID_PSP			equ				5					; String de entrada inválida (opções '-xXx'
 _ERROR_DUPLICATE_PSP		equ				6					; String de entrada com opção duplicada
 _ERROR_INVALID_PSP_PARAM	equ				7					; String de entrada inválida (parâmetros de opções incorretos)
 _ERROR_INVALID_CHAR			equ				8					; Caractere inválido no arquivo de entrada
-_ERROR_UNKNOWN				equ				9					; Erro desconhecido
+_ERROR_UNKNOWN_MSG			equ				9					; Erro de mensagem desconhecida
 
 ;
 ; ===========================================================================================================================
@@ -84,6 +84,7 @@ option_c					db				?
 option_f					db				?
 option_g					db				?
 option_n					db				?
+option_o					db				?
 option_plus					db				?
 option_t					db				?
 
@@ -131,7 +132,8 @@ error_invalid_psp_param_msg2 db				'" da opcao "', _CHAR_NULL
 error_invalid_psp_param_msgv db				_CHAR_CR, _CHAR_LF, 'Erro 07: parametro da opcao "', _CHAR_NULL
 error_invalid_char_msg1		db				_CHAR_CR, _CHAR_LF, 'Erro 08: caractere "', _CHAR_NULL
 error_invalid_char_msg2		db				'" do arquivo na linha "', _CHAR_NULL
-error_unknown_msg			db				_CHAR_CR, _CHAR_LF, 'Erro desconhecido.', _CHAR_CR, _CHAR_LF, _CHAR_NULL
+error_unknown_msg1			db				_CHAR_CR, _CHAR_LF, 'Erro 09: trecho "', _CHAR_NULL
+error_unknown_msg2			db				'" nao reconhecido.', _CHAR_CR, _CHAR_LF, _CHAR_NULL
 
 ;
 ; ===========================================================================================================================
@@ -148,6 +150,7 @@ error_unknown_msg			db				_CHAR_CR, _CHAR_LF, 'Erro desconhecido.', _CHAR_CR, _C
 				mov		option_f, _DISABLED
 				mov		option_g, _DISABLED
 				mov		option_n, _DISABLED
+				mov		option_o, _DISABLED
 				mov		option_plus, _DISABLED
 				mov		option_t, _DISABLED
 				mov		psp_string_segment_cursor, offset psp_string
@@ -196,6 +199,18 @@ input_loop:
 				jmp		main_return						; Encerrar programa com erro
 
 valid_option_f:
+				cmp		option_f, _ENABLED				; Avaliar se há opção duplicada
+				jne		not_duplicate_f
+
+				mov		error_code, _ERROR_DUPLICATE_PSP
+
+				lea		di, error_string1				; Guardar mensagem de erro a ser mostrada
+				mov		si, psp_string_segment_cursor
+				call	strcpy
+
+				jmp		main_return						; Encerrar programa com erro
+
+not_duplicate_f:
 				cmp		psp_string_segments, 0			; Avaliar se há parâmetro a ser processado
 				jne		valid_param_f
 
@@ -241,6 +256,18 @@ not_option_f:
 				jmp		main_return						; Encerrar programa com erro
 
 valid_option_o:
+				cmp		option_o, _ENABLED				; Avaliar se há opção duplicada
+				jne		not_duplicate_o
+
+				mov		error_code, _ERROR_DUPLICATE_PSP
+
+				lea		di, error_string1				; Guardar mensagem de erro a ser mostrada
+				mov		si, psp_string_segment_cursor
+				call	strcpy
+
+				jmp		main_return						; Encerrar programa com erro
+
+not_duplicate_o:
 				cmp		psp_string_segments, 0			; Avaliar se há parâmetro a ser processado
 				jne		valid_param_o
 
@@ -257,6 +284,8 @@ valid_option_o:
 				jmp		main_return						; Encerrar programa com erro
 
 valid_param_o:
+				mov		option_o, _ENABLED				; Habilitar opção 'o' quando há parâmetro válido
+
 				inc		bp
 				mov		si, bp							; Copiar string com o nome de arquivo
 				lea		di, filename_dst
@@ -284,6 +313,18 @@ not_option_o:
 				jmp		main_return						; Encerrar programa com erro
 
 valid_option_n:
+				cmp		option_n, _ENABLED				; Avaliar se há opção duplicada
+				jne		not_duplicate_n
+
+				mov		error_code, _ERROR_DUPLICATE_PSP
+
+				lea		di, error_string1				; Guardar mensagem de erro a ser mostrada
+				mov		si, psp_string_segment_cursor
+				call	strcpy
+
+				jmp		main_return						; Encerrar programa com erro
+
+not_duplicate_n:
 				cmp		psp_string_segments, 0			; Avaliar se há valido parâmetro a ser processado
 				jne		existent_param_n
 
@@ -389,7 +430,7 @@ unknown_option:
 				jmp		main_return						; Encerrar programa com erro
 
 unknown_string:
-				mov		error_code, _ERROR_UNKNOWN		; Atribuir respectivo código de erro
+				mov		error_code, _ERROR_UNKNOWN_MSG		; Atribuir respectivo código de erro
 
 				lea		di, error_string1				; Guardar mensagem de erro a ser mostrada
 				mov		si, psp_string_segment_cursor
@@ -1037,10 +1078,14 @@ not_invalid_psp_param_error:
 				jmp		error_handler_return
 
 not_invalid_char_error:
-				cmp		error_code, _ERROR_UNKNOWN
+				cmp		error_code, _ERROR_UNKNOWN_MSG
 				jne		error_handler_return
 
-				lea		bx, error_unknown_msg			; Escrever o erro desconhecido
+				lea		bx, error_unknown_msg1			; Escrever o erro e o texto não reconhecido
+				call	printf_s
+				lea		bx, error_string1
+				call	printf_s
+				lea		bx, error_unknown_msg2
 				call	printf_s
 
 error_handler_return:
