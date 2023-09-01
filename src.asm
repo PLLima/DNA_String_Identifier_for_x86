@@ -384,30 +384,94 @@ invalid_param_n:
 
 option_atcg_loop:
 				cmp		[bp], byte ptr _CHAR_L_A		; Se for uma opção 'a' ou 't' ou 'c' ou 'g' ou '+'
-				je		enable_option_a
+				je		valid_option_a
 				cmp		[bp], byte ptr _CHAR_L_T
-				je		enable_option_t
+				je		valid_option_t
 				cmp		[bp], byte ptr _CHAR_L_C
-				je		enable_option_c
+				je		valid_option_c
 				cmp		[bp], byte ptr _CHAR_L_G
-				je		enable_option_g
+				je		valid_option_g
 				cmp		[bp], byte ptr _CHAR_PLUS
-				je		enable_option_plus
+				je		valid_option_plus
 
 				jmp		unknown_option					; Se houver algum caractere inválido, retornar erro
 
-enable_option_a:										; Habilitar as respectivas opções
+valid_option_a:											; Verificar se não há opções duplicadas
+				cmp		option_a, _ENABLED				; Se não houver, habilitar opções normalmente
+				jne		enable_option_a
+
+				mov		error_code, _ERROR_DUPLICATE_PSP
+
+				lea		di, error_string1				; Guardar mensagem de erro a ser mostrada
+				mov		si, psp_string_segment_cursor
+				call	strcpy
+
+				jmp		main_return						; Encerrar programa com erro
+
+enable_option_a:
 				mov		option_a, _ENABLED
 				jmp		option_atcg_loop_increment
+
+valid_option_t:
+				cmp		option_t, _ENABLED				; Se não houver, habilitar opções normalmente
+				jne		enable_option_t
+
+				mov		error_code, _ERROR_DUPLICATE_PSP
+
+				lea		di, error_string1				; Guardar mensagem de erro a ser mostrada
+				mov		si, psp_string_segment_cursor
+				call	strcpy
+
+				jmp		main_return						; Encerrar programa com erro
+
 enable_option_t:
 				mov		option_t, _ENABLED
 				jmp		option_atcg_loop_increment
+
+valid_option_c:
+				cmp		option_c, _ENABLED				; Se não houver, habilitar opções normalmente
+				jne		enable_option_c
+
+				mov		error_code, _ERROR_DUPLICATE_PSP
+
+				lea		di, error_string1				; Guardar mensagem de erro a ser mostrada
+				mov		si, psp_string_segment_cursor
+				call	strcpy
+
+				jmp		main_return						; Encerrar programa com erro
+
 enable_option_c:
 				mov		option_c, _ENABLED
 				jmp		option_atcg_loop_increment
+
+valid_option_g:
+				cmp		option_g, _ENABLED				; Se não houver, habilitar opções normalmente
+				jne		enable_option_g
+
+				mov		error_code, _ERROR_DUPLICATE_PSP
+
+				lea		di, error_string1				; Guardar mensagem de erro a ser mostrada
+				mov		si, psp_string_segment_cursor
+				call	strcpy
+
+				jmp		main_return						; Encerrar programa com erro
+
 enable_option_g:
 				mov		option_t, _ENABLED
 				jmp		option_atcg_loop_increment
+
+valid_option_plus:
+				cmp		option_plus, _ENABLED			; Se não houver, habilitar opções normalmente
+				jne		enable_option_plus
+
+				mov		error_code, _ERROR_DUPLICATE_PSP
+
+				lea		di, error_string1				; Guardar mensagem de erro a ser mostrada
+				mov		si, psp_string_segment_cursor
+				call	strcpy
+
+				jmp		main_return						; Encerrar programa com erro
+
 enable_option_plus:
 				mov		option_plus, _ENABLED
 				jmp		option_atcg_loop_increment
