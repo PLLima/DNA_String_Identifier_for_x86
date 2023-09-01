@@ -64,7 +64,8 @@ _ERROR_INVALID_PSP			equ				5					; String de entrada inválida (opções '-xXx'
 _ERROR_DUPLICATE_PSP		equ				6					; String de entrada com opção duplicada
 _ERROR_INVALID_PSP_PARAM	equ				7					; String de entrada inválida (parâmetros de opções incorretos)
 _ERROR_INVALID_CHAR			equ				8					; Caractere inválido no arquivo de entrada
-_ERROR_UNKNOWN_MSG			equ				9					; Erro de mensagem desconhecida
+_ERROR_UNKNOWN_MSG			equ				9					; Mensagem desconhecida
+_ERROR_FILE_READING			equ				10					; Problema de leitura no arquivo
 
 ;
 ; ===========================================================================================================================
@@ -92,9 +93,18 @@ filename_src				db				256 dup (?)			; Nomes dos arquivos de entrada e saída
 filename_dst				db				256 dup (?)
 filehandle_src				dw				0					; Handles dos arquivo de entrada e saída
 filehandle_dst				dw				0
+filechar					db				0, _CHAR_NULL		; Caractere lido do arquivo (com espaço para uma "string")
+last_filechar				db				0					; Caracteres lidos anteriormente no arquivo
+last_last_filechar			db				0
+filelines					dw				0					; Quantidade de linhas do arquivo de entrada
+filelines_string			db				6 dup (?)			; String com a quantidade de linhas do arquivo de entrada	
 
 dna_group_size				dw				0					; Tamanho de cada grupo de bases de DNA
 dna_group_size_string		db				256 dup (?)			; String com o tamanho de cada grupo de bases
+dna_group_amount			dw				0					; Quantidade de grupos de bases de DNA
+dna_group_amount_string		db				6 dup (?)			; String com a quantidade de grupos de bases de DNA
+dna_base_amount				dw				0					; Quantidade de bases de DNA
+dna_base_amount_string		db				6 dup (?)			; String com a quantidade de bases de DNA
 
 ; Strings Constantes
 null_msg					db				_CHAR_NULL
@@ -110,6 +120,7 @@ sprintf_w_m					dw				0
 error_code					db				_ERROR_NONE			; Código de erro
 error_string1				db				256 dup (?)			; Strings com informações do respectivo erro
 error_string2				db				256 dup (?)
+error_string3				db				256 dup (?)
 
 ; Mensagens de Erro Constantes
 error_invalid_msg_o			db				'" invalido.', _CHAR_CR, _CHAR_LF, _CHAR_NULL
@@ -131,9 +142,13 @@ error_invalid_psp_param_msg1 db				_CHAR_CR, _CHAR_LF, 'Erro 07: parametro "', _
 error_invalid_psp_param_msg2 db				'" da opcao "', _CHAR_NULL
 error_invalid_psp_param_msgv db				_CHAR_CR, _CHAR_LF, 'Erro 07: parametro da opcao "', _CHAR_NULL
 error_invalid_char_msg1		db				_CHAR_CR, _CHAR_LF, 'Erro 08: caractere "', _CHAR_NULL
-error_invalid_char_msg2		db				'" do arquivo na linha "', _CHAR_NULL
+error_invalid_char_msg2		db				'" do arquivo "', _CHAR_NULL
+error_invalid_char_msg3		db				'" na linha "', _CHAR_NULL
 error_unknown_msg1			db				_CHAR_CR, _CHAR_LF, 'Erro 09: trecho "', _CHAR_NULL
 error_unknown_msg2			db				'" nao reconhecido.', _CHAR_CR, _CHAR_LF, _CHAR_NULL
+error_file_reading_msg1		db				_CHAR_CR, _CHAR_LF, 'Erro 10: falha de leitura do arquivo "', _CHAR_NULL
+error_file_reading_msg2		db				'" na linha "', _CHAR_NULL
+error_file_reading_msg3		db				'".', _CHAR_CR, _CHAR_LF, _CHAR_NULL
 
 ;
 ; ===========================================================================================================================
@@ -156,6 +171,10 @@ error_unknown_msg2			db				'" nao reconhecido.', _CHAR_CR, _CHAR_LF, _CHAR_NULL
 				mov		psp_string_segment_cursor, offset psp_string
 				mov		psp_string_segments, 0
 				mov		dna_group_size, 0
+				mov		filelines, 1
+				mov		filechar, _CHAR_NULL
+				mov		last_filechar, _CHAR_NULL
+				mov		last_last_filechar, _CHAR_NULL
 
 				lea		bx, psp_string					; Copiar string de entrada do programa
 				call	copy_psp_s
@@ -540,6 +559,95 @@ mandatory_options_enabled:
 
 valid_filename:
 				mov		filehandle_src, bx
+
+file_validation_loop:									; Loop de validação de arquivo de entrada
+				mov		bx, filehandle_src
+				mov		cx, _SINGLE_BYTE
+				lea		dx, filechar
+				call	fread
+				jnc		valid_file_reading
+
+				mov		error_code, _ERROR_FILE_READING	; Indicar erro de leitura de arquivo
+
+				lea		di, error_string1				; Guardar mensagens de erro a serem mostradas
+				lea		si, filename_src
+				call	strcpy
+
+				mov		ax, filelines
+				lea		bx, filelines_string
+				call	sprintf_w
+				lea		di, error_string2
+				lea		si, filelines_string
+				call	strcpy
+
+				jmp		main_return						; Encerrar programa com erro
+
+valid_file_reading:
+				cmp		ax, _SINGLE_BYTE				; Descobrir se há bytes a serem lidos no arquivo
+				jne		file_validation_loop_end
+
+;IMPLEMENTAR CONTAGEM DE LINHAS VÁLIDAS NO ARQUIVO
+;				cmp		filechar, _CHAR_LF				; Verificar se houve nova linha no arquivo
+;				jne		not_file_newline
+;				cmp		last_last_filechar, _CHAR_U_A
+;				je		file_newline
+;				cmp		last_last_filechar, _CHAR_U_T
+;				je		file_newline
+;				cmp		last_last_filechar, _CHAR_U_C
+;				je		file_newline
+;				cmp		last_last_filechar, _CHAR_U_G
+;				je		file_newline
+;
+;				jmp		not_file_newline
+;
+;file_newline:
+;				inc		filelines
+;				jmp		file_validation_loop_increment
+
+not_file_newline:
+				cmp		filechar, _CHAR_U_A				; Validar se leu um caractere válido
+				je		valid_char
+				cmp		filechar, _CHAR_U_T
+				je		valid_char
+				cmp		filechar, _CHAR_U_C
+				je		valid_char
+				cmp		filechar, _CHAR_U_G
+				je		valid_char
+				cmp		filechar, _CHAR_CR
+				je		valid_char
+
+				mov		error_code, _ERROR_INVALID_CHAR	; Indicar erro de caractere inválido
+
+				lea		di, error_string1				; Guardar mensagens de erro a serem mostradas
+				lea		si, filechar
+				call	strcpy
+
+				lea		di, error_string2
+				lea		si, filename_src
+				call	strcpy
+
+				mov		ax, filelines
+				lea		bx, filelines_string
+				call	sprintf_w
+				lea		di, error_string2
+				lea		si, filelines_string
+				call	strcpy
+
+				jmp		main_return						; Encerrar programa com erro
+
+valid_char:
+
+
+file_validation_loop_increment:
+				mov		ah, last_filechar				; Atualizar histórico de caracteres
+				mov		last_last_filechar, ah
+
+				mov		al, filechar
+				mov		last_filechar, al
+
+				jmp		file_validation_loop			; Continuar loop de validação de arquivo
+
+file_validation_loop_end:
 
 ; CÓDIGO TEMPORÁRIO DE TESTE
 				lea		bx, newline
@@ -1138,18 +1246,49 @@ not_invalid_psp_param_error:
 				cmp		error_code, _ERROR_INVALID_CHAR
 				jne		not_invalid_char_error
 
-														; Tratar erro de parâmetros de caractere inválido no arquivo
+				lea		bx, error_invalid_char_msg1		; Escrever o erro, o caractere inválido, o arquivo e a linha no arquivo
+				call	printf_s
+				lea		bx, error_string1
+				call	printf_s
+				lea		bx, error_invalid_char_msg2
+				call	printf_s
+				lea		bx, error_string2
+				call	printf_s
+				lea		bx, error_invalid_char_msg3
+				call	printf_s
+				lea		bx, error_string3
+				call	printf_s
+				lea		bx, error_invalid_msg_o
+				call	printf_s
+
 				jmp		error_handler_return
 
 not_invalid_char_error:
 				cmp		error_code, _ERROR_UNKNOWN_MSG
-				jne		error_handler_return
+				jne		not_unknown_msg_error
 
 				lea		bx, error_unknown_msg1			; Escrever o erro e o texto não reconhecido
 				call	printf_s
 				lea		bx, error_string1
 				call	printf_s
 				lea		bx, error_unknown_msg2
+				call	printf_s
+
+				jmp		error_handler_return
+
+not_unknown_msg_error:
+				cmp		error_code, _ERROR_FILE_READING
+				jne		error_handler_return
+
+				lea		bx, error_file_reading_msg1		; Escrever o erro, o arquivo e a linha do problema de leitura do arquivo
+				call	printf_s
+				lea		bx, error_string1
+				call	printf_s
+				lea		bx, error_file_reading_msg2
+				call	printf_s
+				lea		bx, error_string2
+				call	printf_s
+				lea		bx, error_file_reading_msg3
 				call	printf_s
 
 error_handler_return:
