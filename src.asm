@@ -107,9 +107,21 @@ dna_group_amount_string		db				6 dup (?)			; String com a quantidade de grupos d
 dna_base_amount				dw				0					; Quantidade de bases de DNA
 dna_base_amount_string		db				6 dup (?)			; String com a quantidade de bases de DNA
 
+dna_base_a_amount			dw				?					; Contagem de bases de cada tipo por grupo
+dna_base_a_amount_string	db				7 dup (?)			; Bem como as respectivas strings
+dna_base_t_amount			dw				?
+dna_base_t_amount_string	db				7 dup (?)
+dna_base_c_amount			dw				?
+dna_base_c_amount_string	db				7 dup (?)
+dna_base_g_amount			dw				?
+dna_base_g_amount_string	db				7 dup (?)
+dna_base_plus_amount		dw				?
+dna_base_plus_amount_string	db				13 dup (?)
+
 ; Strings Constantes
 null_msg					db				_CHAR_NULL
 newline						db				_CHAR_CR, _CHAR_LF, _CHAR_NULL
+semicolumn					db				';', _CHAR_NULL
 semicolumn_newline			db				';', _CHAR_CR, _CHAR_LF, _CHAR_NULL
 dot_newline					db				'.', _CHAR_CR, _CHAR_LF, _CHAR_NULL
 filename_dst_std			db				'a.out', _CHAR_NULL
@@ -127,6 +139,11 @@ data_processing_msg			db				_CHAR_CR, _CHAR_LF, 'Dados a serem processados:', _C
 dna_base_amount_msg			db				'Numero de Bases na Entrada: ', _CHAR_NULL
 dna_group_amount_msg		db				'Numero de Grupos de Bases na Entrada: ', _CHAR_NULL
 filelines_amount_msg		db				'Numero de Linhas com Bases na Entrada: ', _CHAR_NULL
+dna_base_a_column			db				'A;', _CHAR_NULL
+dna_base_t_column			db				'T;', _CHAR_NULL
+dna_base_c_column			db				'C;', _CHAR_NULL
+dna_base_g_column			db				'G;', _CHAR_NULL
+dna_base_plus_column		db				'A+T;C+G;', _CHAR_NULL
 valid_output_msg			db				_CHAR_CR, _CHAR_LF, 'Arquivo de Saida Criado com Sucesso.', _CHAR_CR, _CHAR_LF, _CHAR_NULL
 
 ; Variáveis de Funções Auxiliares
@@ -717,6 +734,10 @@ file_validation_end:
 				mov		bx, filehandle_src				; Colocar cursor do arquivo de entrada no início dele
 				call	rewind
 
+				lea		dx, filename_dst				; Criar arquivo de saída
+				call	fcreate
+				mov		filehandle_dst, bx
+
 ; PROCESSAR ARQUIVO DE ENTRADA PARA GERAR UMA SAÍDA
 file_output_loop:
 
@@ -884,6 +905,37 @@ printf_s		endp
 
 ;
 ; ===========================================================================================================================
+; CX strlen(ES:DI)
+; ===========================================================================================================================
+;
+; Função que copia uma string para outro lugar da memória:
+;
+; Entrada: ES:DI - Ponteiro para o início da string;
+; Saída:   CX    - Tamanho da string de entrada em caracteres (excluindo marcador de final).
+;
+; ===========================================================================================================================
+;
+
+strlen			proc	near
+
+				mov		cx, 0							; Inicializar variáveis e parâmetros internos
+				cld
+				mov		al, _CHAR_NULL
+strlen_loop:
+				scasb									; Contar caracteres até encontrar o marcador de final de string
+				je		strlen_return
+
+				inc		cx
+
+				jmp		strlen_loop
+
+strlen_return:
+				ret
+
+strlen			endp
+
+;
+; ===========================================================================================================================
 ; ES:DI, DS:SI strcpy(ES:DI, DS:SI)
 ; ===========================================================================================================================
 ;
@@ -911,6 +963,43 @@ strcpy_loop:
 				ret
 
 strcpy			endp
+
+;
+; ===========================================================================================================================
+; ES:DI, DS:SI strcat(ES:DI, DS:SI)
+; ===========================================================================================================================
+;
+; Função que concatena a string de origem na string de destino:
+;
+; Entrada: ES:DI - Ponteiro para o início da string de destino;
+;          DS:SI - Ponteiro para o início da string de origem;
+; Saída:   ES:DI - Ponteiro para o marcador de final de string de destino;
+;          DS:SI - Ponteiro para o marcador de final de string de origem.
+;
+; ===========================================================================================================================
+;
+
+strcat			proc	near
+
+				cld										; Inicializar parâmetros de entrada
+				mov		al, _CHAR_NULL
+strcat_beginning_loop:
+				scasb									; Encontrar marcador de final de string de destino
+				jne		strcat_beginning_loop
+
+				dec		di
+
+strcat_copy_loop:
+				movsb									; Copiar a string de origem para o destino
+				cmp		[si - 1], byte ptr _CHAR_NULL
+				jne		strcat_copy_loop
+
+				dec		si
+				dec		di
+
+				ret
+
+strcat			endp
 
 ;
 ; ===========================================================================================================================
