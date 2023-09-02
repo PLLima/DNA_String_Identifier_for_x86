@@ -108,7 +108,24 @@ dna_base_amount_string		db				6 dup (?)			; String com a quantidade de bases de 
 ; Strings Constantes
 null_msg					db				_CHAR_NULL
 newline						db				_CHAR_CR, _CHAR_LF, _CHAR_NULL
-filename_dst_std			db				'a.out', _CHAR_NULL	; String de saída padrão
+semicolumn_newline			db				';', _CHAR_CR, _CHAR_LF, _CHAR_NULL
+dot_newline					db				'.', _CHAR_CR, _CHAR_LF, _CHAR_NULL
+filename_dst_std			db				'a.out', _CHAR_NULL
+valid_input_msg				db				_CHAR_CR, _CHAR_LF, 'Entrada Valida:', _CHAR_CR, _CHAR_LF, _CHAR_CR, _CHAR_LF, _CHAR_NULL
+filename_src_msg			db				'Arquivo de Entrada: ', _CHAR_NULL
+filename_dst_msg			db				'Arquivo de Saida: ', _CHAR_NULL
+dna_group_size_msg			db				'Tamanho dos Grupos de Bases de DNA: ', _CHAR_NULL
+output_information_msg		db				'Bases Contabilizadas na Saida: ', _CHAR_NULL
+output_information_a		db				'A ', _CHAR_NULL
+output_information_t		db				'T ', _CHAR_NULL
+output_information_c		db				'C ', _CHAR_NULL
+output_information_g		db				'G ', _CHAR_NULL
+output_information_plus		db				'A+T;C+G ', _CHAR_NULL
+data_processing_msg			db				_CHAR_CR, _CHAR_LF, 'Dados a serem processados:', _CHAR_CR, _CHAR_LF, _CHAR_CR, _CHAR_LF, _CHAR_NULL
+dna_base_amount_msg			db				'Numero de Bases na Entrada: ', _CHAR_NULL
+dna_group_amount_msg		db				'Numero de Grupos de Bases na Entrada: ', _CHAR_NULL
+filelines_amount_msg		db				'Numero de Linhas com Bases na Entrada: ', _CHAR_NULL
+valid_output_msg			db				_CHAR_CR, _CHAR_LF, 'Arquivo de Saida Criado com Sucesso.', _CHAR_CR, _CHAR_LF, _CHAR_NULL
 
 ; Variáveis de Funções Auxiliares
 sprintf_w_n					dw				0
@@ -477,7 +494,7 @@ valid_option_g:
 				jmp		main_return						; Encerrar programa com erro
 
 enable_option_g:
-				mov		option_t, _ENABLED
+				mov		option_g, _ENABLED
 				jmp		option_atcg_loop_increment
 
 valid_option_plus:
@@ -693,32 +710,20 @@ too_many_dna_bases:
 				jmp		main_return						; Encerrar programa com erro
 
 file_validation_end:
-
-
-; CÓDIGO TEMPORÁRIO DE TESTE
-				lea		bx, newline
-				call	printf_s
-				lea		bx, filename_src
-				call	printf_s
-				lea		bx, newline
-				call	printf_s
-				lea		bx, filename_dst
-				call	printf_s
-				lea		bx, newline
-				call	printf_s
-				lea		bx, dna_group_size_string
-				call	printf_s
-				lea		bx, newline
-				call	printf_s
-				lea		bx, dna_group_size_string
-				mov		ax, dna_group_size
-				call	sprintf_w
-				lea		bx, dna_group_size_string
-				call	printf_s
-;
-
 				mov		bx, filehandle_src				; Fechar arquivo de entrada
 				call	fclose
+
+				call	print_valid_input				; Escrever todos os dados de entrada
+
+; PROCESSAR ARQUIVO DE ENTRADA PARA GERAR UMA SAÍDA
+file_output_loop:
+
+
+
+				lea		bx, newline						; Indicar que acabou o processamento da saída
+				call	printf_s
+				lea		bx, valid_output_msg
+				call	printf_s
 
 main_return:
 				call	error_handler
@@ -1146,6 +1151,125 @@ find_end_of_string_return:
 				ret
 
 find_end_of_string	endp
+
+;
+; ===========================================================================================================================
+; void print_valid_input(...)
+; ===========================================================================================================================
+;
+; Função que escreve os dados de uma entrada válida do programa:
+;
+; Entrada: ...        - Variáveis globais necessárias para imprimir a entrada válida.
+;
+; ===========================================================================================================================
+;
+
+print_valid_input	proc	near
+
+				lea		bx, valid_input_msg					; Colocar primeiro cabeçalho
+				call	printf_s
+
+				lea		bx, filename_src_msg				; Nome do arquivo de entrada
+				call	printf_s
+				lea		bx, filename_src
+				call	printf_s
+				lea		bx, semicolumn_newline
+				call	printf_s
+
+				lea		bx, filename_dst_msg				; Nome do arquivo de saída
+				call	printf_s
+				lea		bx, filename_dst
+				call	printf_s
+				lea		bx, semicolumn_newline
+				call	printf_s
+				
+				lea		bx, dna_group_size_msg				; Tamanho de cada grupo de DNA
+				call	printf_s
+				lea		bx, dna_group_size_string
+				call	printf_s
+				lea		bx, semicolumn_newline
+				call	printf_s
+
+				lea		bx, output_information_msg			; Informações do arquivo de entrada a serem processadas
+				call	printf_s
+
+				cmp		option_a, _ENABLED					; Validar quais bases serão contabilizadas
+				jne		option_a_disabled
+
+				lea		bx, output_information_a
+				call	printf_s
+
+option_a_disabled:
+				cmp		option_t, _ENABLED
+				jne		option_t_disabled
+
+				lea		bx, output_information_t
+				call	printf_s
+
+option_t_disabled:
+				cmp		option_c, _ENABLED
+				jne		option_c_disabled
+
+				lea		bx, output_information_c
+				call	printf_s
+
+option_c_disabled:
+				cmp		option_g, _ENABLED
+				jne		option_g_disabled
+
+				lea		bx, output_information_g
+				call	printf_s
+
+option_g_disabled:
+				cmp		option_plus, _ENABLED
+				jne		option_plus_disabled
+
+				lea		bx, output_information_plus
+				call	printf_s
+
+option_plus_disabled:
+				lea		bx, dot_newline
+				call	printf_s				
+
+				lea		bx, newline							; Imprimir linha vazia
+				call	printf_s
+
+				lea		bx, data_processing_msg				; Colocar segundo cabeçalho
+				call	printf_s
+
+				lea		bx, dna_base_amount_msg				; Número de bases de DNA
+				call	printf_s
+				lea		bx, dna_base_amount_string
+				mov		ax, dna_base_amount
+				call	sprintf_w
+				lea		bx, dna_base_amount_string
+				call	printf_s
+				lea		bx, semicolumn_newline
+				call	printf_s
+
+				lea		bx, dna_group_amount_msg			; Número de grupos de bases de DNA
+				call	printf_s
+				lea		bx, dna_group_amount_string
+				mov		ax, dna_group_amount
+				call	sprintf_w
+				lea		bx, dna_group_amount_string
+				call	printf_s
+				lea		bx, semicolumn_newline
+				call	printf_s
+
+				lea		bx, filelines_amount_msg			; Número de linhas com bases no arquivo de entrada
+				call	printf_s
+				lea		bx, filelines_string
+				mov		ax, filelines
+				call	sprintf_w
+				lea		bx, filelines_string
+				call	printf_s
+				lea		bx, dot_newline
+				call	printf_s
+
+				ret
+
+print_valid_input	endp
 
 ;
 ; ===========================================================================================================================
