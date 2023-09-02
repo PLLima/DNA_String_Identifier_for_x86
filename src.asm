@@ -50,6 +50,8 @@ _BASE_10					equ				10					; Base Numérica 10
 
 _SINGLE_BYTE				equ				1					; 1 Byte
 
+_SEEK_SET					equ				0					; Posições para posicionar cursor no arquivo
+
 _MIN_DNA_GROUP_SIZE			equ				1					; Tamanhos mínimo e máximo de grupos de DNA
 _MAX_DNA_GROUP_SIZE			equ				10000
 
@@ -710,15 +712,19 @@ too_many_dna_bases:
 				jmp		main_return						; Encerrar programa com erro
 
 file_validation_end:
-				mov		bx, filehandle_src				; Fechar arquivo de entrada
-				call	fclose
-
 				call	print_valid_input				; Escrever todos os dados de entrada
+
+				mov		bx, filehandle_src				; Colocar cursor do arquivo de entrada no início dele
+				call	rewind
 
 ; PROCESSAR ARQUIVO DE ENTRADA PARA GERAR UMA SAÍDA
 file_output_loop:
 
 
+				mov		bx, filehandle_src				; Fechar arquivo de entrada
+				call	fclose
+				mov		bx, filehandle_dst				; Fechar arquivo de saída
+				call	fclose
 
 				lea		bx, newline						; Indicar que acabou o processamento da saída
 				call	printf_s
@@ -926,6 +932,7 @@ fopen			proc	near
 				mov		ah, 3Dh
 				int		21h
 				mov		bx, ax
+
 				ret
 
 fopen			endp
@@ -950,6 +957,7 @@ fcreate			proc	near
 				mov		ah, 3Ch
 				int		21h
 				mov		bx, ax
+
 				ret
 
 fcreate			endp
@@ -974,6 +982,7 @@ fread			proc	near
 
 				mov		ah, 3Fh							; Chamar a respectiva interrupção de sistema
 				int		21h
+
 				ret
 
 fread			endp
@@ -998,9 +1007,36 @@ fwrite			proc	near
 
 				mov		ah, 40h							; Chamar a respectiva interrupção de sistema
 				int		21h
+
 				ret
 
 fwrite			endp
+
+;
+; ===========================================================================================================================
+; CF, DX:AX rewind(BX)
+; ===========================================================================================================================
+;
+; Função que retorna o ponteiro do arquivo para o posição inicial:
+;
+; Entrada: BX    - Handle do arquivo;
+; Saída:   CF    - Flag indicando se a operação foi bem sucedida (0) ou não (1);
+;          DX:AX - Posição inicial do arquivo;
+;
+; ===========================================================================================================================
+;
+
+rewind			proc	near
+
+				mov		cx, 0							; Configurar offset para início do arquivo
+				mov		dx, 0
+				mov		al, _SEEK_SET
+				mov		ah, 42h							; Chamar a respectiva interrupção de sistema
+				int		21h
+
+				ret
+
+rewind			endp
 
 ;
 ; ===========================================================================================================================
@@ -1019,6 +1055,7 @@ fclose			proc	near
 
 				mov		ah, 3Eh							; Chamar a respectiva interrupção de sistema
 				int		21h
+
 				ret
 
 fclose			endp
@@ -1060,6 +1097,7 @@ copy_psp_s		proc	near
 				mov		psp_string_size, dl				; Colocar indicador de final de string '\0'
 				dec 	di
 				mov		byte [di], _CHAR_NULL
+
 				ret
 
 copy_psp_s		endp
@@ -1165,6 +1203,9 @@ find_end_of_string	endp
 ;
 
 print_valid_input	proc	near
+
+				lea		bx, newline							; Imprimir linha vazia
+				call	printf_s
 
 				lea		bx, valid_input_msg					; Colocar primeiro cabeçalho
 				call	printf_s
