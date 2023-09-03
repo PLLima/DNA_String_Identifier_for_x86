@@ -110,14 +110,10 @@ dna_base_amount				dw				0					; Quantidade de bases de DNA
 dna_base_amount_string		db				6 dup (?)			; String com a quantidade de bases de DNA
 
 dna_base_a_amount			dw				?					; Contagem de bases de cada tipo por grupo
-dna_base_a_amount_string	db				7 dup (?)			; Bem como as respectivas strings
 dna_base_t_amount			dw				?
-dna_base_t_amount_string	db				7 dup (?)
 dna_base_c_amount			dw				?
-dna_base_c_amount_string	db				7 dup (?)
 dna_base_g_amount			dw				?
-dna_base_g_amount_string	db				7 dup (?)
-dna_base_plus_string		db				13 dup (?)
+dna_base_string				db				13 dup (?)			; String utilizada para montar os grupos no arquivo de saída
 
 ; Strings Constantes
 null_msg					db				_CHAR_NULL
@@ -740,7 +736,7 @@ file_validation_end:
 				mov		filehandle_dst, bx
 
 				lea		di, fileheader_dst				; Montar cabeçalho de arquivo de saída
-				call	create_header_string			; (CX recebe o número de bytes do cabeçalho)
+				call	format_header_string			; (CX recebe o número de bytes do cabeçalho)
 
 				mov		bx, filehandle_dst				; Escrever cabeçalho no arquivo de saída
 				lea		dx, fileheader_dst
@@ -1411,7 +1407,7 @@ print_valid_input	endp
 
 ;
 ; ===========================================================================================================================
-; CX create_header_string(DS:DI)
+; CX format_header_string(DS:DI)
 ; ===========================================================================================================================
 ;
 ; Função que monta a string de cabeçalho do arquivo de saída:
@@ -1422,7 +1418,7 @@ print_valid_input	endp
 ; ===========================================================================================================================
 ;
 
-create_header_string proc	near
+format_header_string proc	near
 
 				push	di									; Guardar início da string para avaliar o tamanho total
 
@@ -1472,7 +1468,137 @@ column_plus_disabled:
 
 				ret
 
-create_header_string endp
+format_header_string endp
+
+;
+; ===========================================================================================================================
+; CX format_dna_group_string(DS:DI)
+; ===========================================================================================================================
+;
+; Função que monta a string de cada grupo do arquivo de saída:
+;
+; Entrada: DS:DI - String para armazenar as contagens do grupo;
+; Saída:   CX    - Quantidade de caracteres no cabeçalho.
+;
+; ===========================================================================================================================
+;
+
+format_dna_group_string proc	near
+
+				push	di									; Guardar início da string para avaliar o tamanho total
+
+				lea		si, null_msg						; Limpar a string de saída
+				call	strcpy
+
+				cmp		option_a, _ENABLED					; Validar quais bases serão impressas no cabeçalho
+				jne		base_a_disabled						; Contabilizando as respectivas bases
+
+				push	di									; Guardar ponteiro de string de destino
+
+				mov		ax, dna_base_a_amount				; Formatar a informação de uma base
+				lea		bx, dna_base_string
+				call	sprintf_w
+
+				lea		di, dna_base_string
+				lea		si, semicolumn
+				call	strcat
+
+				pop		di
+				lea		si, dna_base_string
+				call	strcat
+
+base_a_disabled:
+				cmp		option_t, _ENABLED
+				jne		base_t_disabled
+
+				push	di									; Guardar ponteiro de string de destino
+
+				mov		ax, dna_base_t_amount				; Formatar a informação de uma base
+				lea		bx, dna_base_string
+				call	sprintf_w
+
+				lea		di, dna_base_string
+				lea		si, semicolumn
+				call	strcat
+
+				pop		di
+				lea		si, dna_base_string
+				call	strcat
+
+base_t_disabled:
+				cmp		option_c, _ENABLED
+				jne		base_c_disabled
+
+				push	di									; Guardar ponteiro de string de destino
+
+				mov		ax, dna_base_c_amount				; Formatar a informação de uma base
+				lea		bx, dna_base_string
+				call	sprintf_w
+
+				lea		di, dna_base_string
+				lea		si, semicolumn
+				call	strcat
+
+				pop		di
+				lea		si, dna_base_string
+				call	strcat
+
+base_c_disabled:
+				cmp		option_g, _ENABLED
+				jne		base_g_disabled
+
+				push	di									; Guardar ponteiro de string de destino
+
+				mov		ax, dna_base_g_amount				; Formatar a informação de uma base
+				lea		bx, dna_base_string
+				call	sprintf_w
+
+				lea		di, dna_base_string
+				lea		si, semicolumn
+				call	strcat
+
+				pop		di
+				lea		si, dna_base_string
+				call	strcat
+
+base_g_disabled:
+				cmp		option_plus, _ENABLED
+				jne		base_plus_disabled
+
+				push	di									; Guardar ponteiro de string de destino
+
+				mov		ax, dna_base_a_amount				; Processar A+T e colocar a informação na string de base
+				add		ax, dna_base_t_amount
+				lea		bx, dna_base_string
+				call	sprintf_w
+
+				lea		di, dna_base_string
+				lea		si, semicolumn
+				call	strcat
+
+				mov		ax, dna_base_c_amount				; Processar C+G e colocar a informação na string de base
+				add		ax, dna_base_g_amount
+				mov		bx, di
+				call	sprintf_w
+
+				lea		di, dna_base_string
+				lea		si, semicolumn
+				call	strcat
+
+				pop		di
+				lea		si, dna_base_string
+				call	strcat
+
+base_plus_disabled:
+				lea		si, newline							; Finalizar cabeçalho com quebra de linha
+				call	strcat
+
+				pop		di									; Descobrir o tamanho da string de cabeçalho
+				call	strlen
+
+				ret
+
+format_dna_group_string endp
 
 ;
 ; ===========================================================================================================================
