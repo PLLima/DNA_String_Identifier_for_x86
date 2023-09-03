@@ -101,6 +101,7 @@ filechar					db				0, _CHAR_NULL		; Caractere lido do arquivo (com espaço para 
 filechar_newline			db				?					; Flag indicando leitura de linefeed no arquivo
 filelines					dw				0					; Quantidade de linhas do arquivo de entrada
 filelines_string			db				6 dup (?)			; String com a quantidade de linhas do arquivo de entrada
+fileoffset_src				dw				?					; Offset para retornar no arquivo de entrada
 fileheader_dst				db				19 dup (?)			; Cabeçalho do arquivo de saída
 fileline_dst				db				39 dup (?)			; Conteúdo de uma linha do arquivo de saída
 
@@ -111,6 +112,8 @@ dna_group_amount_string		db				6 dup (?)			; String com a quantidade de grupos d
 dna_base_amount				dw				0					; Quantidade de bases de DNA
 dna_base_amount_string		db				6 dup (?)			; String com a quantidade de bases de DNA
 
+specialchar_count			dw				?					; Contagem de caracteres especiais
+dna_group_count				dw				?					; Contador de grupos de DNA
 dna_base_a_amount			dw				?					; Contagem de bases de cada tipo por grupo
 dna_base_t_amount			dw				?
 dna_base_c_amount			dw				?
@@ -209,8 +212,14 @@ error_file_reading_msg3		db				'".', _CHAR_CR, _CHAR_LF, _CHAR_NULL
 				mov		dna_group_size, 0
 				mov		dna_group_amount, 0
 				mov		dna_base_amount, 0
+				mov		dna_base_a_amount, 0
+				mov		dna_base_t_amount, 0
+				mov		dna_base_c_amount, 0
+				mov		dna_base_g_amount, 0
 				mov		filelines, 1
 				mov		filechar_newline, _DISABLED
+				mov		dna_group_count, 0
+				mov		specialchar_count, 0
 
 				lea		bx, psp_string					; Copiar string de entrada do programa
 				call	copy_psp_s
@@ -744,10 +753,87 @@ file_validation_end:
 				lea		dx, fileheader_dst
 				call	fwrite
 
-; PROCESSAR ARQUIVO DE ENTRADA PARA GERAR UMA SAÍDA
 file_output_loop:
+				mov		ax, dna_group_count				; Descobrir se já foram lidas todas as bases do arquivo de entrada
+				cmp		ax, dna_group_amount
+				je		file_output_loop_end
 
+file_output_read_char:
+				mov		bx, filehandle_src				; Ler arquivo de entrada byte a byte
+				mov		cx, _SINGLE_BYTE
+				lea		dx, filechar
+				call	fread
 
+				cmp		filechar, _CHAR_LF				; Validar qual caractere foi lido
+				je		special_char
+				cmp		filechar, _CHAR_CR
+				je		special_char
+				cmp		filechar, _CHAR_U_A
+				je		a_char
+				cmp		filechar, _CHAR_U_T
+				je		t_char
+				cmp		filechar, _CHAR_U_C
+				je		c_char
+				cmp		filechar, _CHAR_U_G
+				je		g_char
+
+				jmp		dna_group_validation
+
+special_char:
+				inc		specialchar_count				; Contabilizar a quantidade de caracteres de cada tipo
+				jmp		dna_group_validation
+
+a_char:
+				inc		dna_base_a_amount
+				jmp		dna_group_validation
+
+t_char:
+				inc		dna_base_t_amount
+				jmp		dna_group_validation
+
+c_char:
+				inc		dna_base_c_amount
+				jmp		dna_group_validation
+
+g_char:
+				inc		dna_base_g_amount
+
+dna_group_validation:
+				mov		ax, dna_base_a_amount			; Descobrir se um grupo já foi processado
+				add		ax, dna_base_t_amount
+				add		ax, dna_base_c_amount
+				add		ax, dna_base_g_amount
+				cmp		ax, dna_group_size
+				jne		file_output_read_char
+
+				inc		dna_group_count					; Contabilizar grupos
+
+				lea		di, fileline_dst				; Montar string com os dados de um grupo
+				call	format_dna_group_string			; (CX recebe o número de bytes da string)
+
+				mov		bx, filehandle_dst				; Escrever string no arquivo de saída
+				lea		dx, fileline_dst
+				call	fwrite
+
+				mov		ax, dna_group_size				; Calcular e formatar offset do arquivo
+				add		ax, specialchar_count
+				dec		ax
+				neg		ax
+				call	fseek_offset
+
+				mov		bx, filehandle_src				; Ajustar offset no arquivo de entrada
+				mov		al, _SEEK_CUR
+				call	fseek
+
+				mov		specialchar_count, 0			; Reiniciar contagem de todos os caracteres
+				mov		dna_base_a_amount, 0
+				mov		dna_base_t_amount, 0
+				mov		dna_base_c_amount, 0
+				mov		dna_base_g_amount, 0
+
+				jmp		file_output_loop
+
+file_output_loop_end:
 				mov		bx, filehandle_src				; Fechar arquivo de entrada
 				call	fclose
 				mov		bx, filehandle_dst				; Fechar arquivo de saída
@@ -1514,8 +1600,8 @@ column_g_disabled:
 				call	strcat
 
 column_plus_disabled:
-				lea		si, newline							; Finalizar cabeçalho com quebra de linha
-				call	strcat
+				dec		di									; Remover o último ';' da linha
+				mov		[di], byte ptr _CHAR_NULL
 
 				pop		di									; Descobrir o tamanho da string de cabeçalho
 				call	strlen
@@ -1543,6 +1629,9 @@ format_dna_group_string proc	near
 
 				lea		si, null_msg						; Limpar a string de saída
 				call	strcpy
+
+				lea		si, newline							; Colocar nova linha no início da string
+				call	strcat
 
 				cmp		option_a, _ENABLED					; Validar quais bases serão impressas no cabeçalho
 				jne		base_a_disabled						; Contabilizando as respectivas bases
@@ -1644,10 +1733,10 @@ base_g_disabled:
 				call	strcat
 
 base_plus_disabled:
-				lea		si, newline							; Finalizar cabeçalho com quebra de linha
-				call	strcat
+				dec		di									; Remover o último ';' da linha
+				mov		[di], byte ptr _CHAR_NULL
 
-				pop		di									; Descobrir o tamanho da string de cabeçalho
+				pop		di									; Descobrir o tamanho da string total
 				call	strlen
 
 				ret
