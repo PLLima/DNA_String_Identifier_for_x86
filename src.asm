@@ -98,7 +98,9 @@ filehandle_dst				dw				0
 filechar					db				0, _CHAR_NULL		; Caractere lido do arquivo (com espaço para uma "string")
 filechar_newline			db				?					; Flag indicando leitura de linefeed no arquivo
 filelines					dw				0					; Quantidade de linhas do arquivo de entrada
-filelines_string			db				6 dup (?)			; String com a quantidade de linhas do arquivo de entrada	
+filelines_string			db				6 dup (?)			; String com a quantidade de linhas do arquivo de entrada
+fileheader_dst				db				19 dup (?)			; Cabeçalho do arquivo de saída
+fileline_dst				db				39 dup (?)			; Conteúdo de uma linha do arquivo de saída
 
 dna_group_size				dw				0					; Tamanho de cada grupo de bases de DNA
 dna_group_size_string		db				256 dup (?)			; String com o tamanho de cada grupo de bases
@@ -115,8 +117,7 @@ dna_base_c_amount			dw				?
 dna_base_c_amount_string	db				7 dup (?)
 dna_base_g_amount			dw				?
 dna_base_g_amount_string	db				7 dup (?)
-dna_base_plus_amount		dw				?
-dna_base_plus_amount_string	db				13 dup (?)
+dna_base_plus_string		db				13 dup (?)
 
 ; Strings Constantes
 null_msg					db				_CHAR_NULL
@@ -134,7 +135,7 @@ output_information_a		db				'A ', _CHAR_NULL
 output_information_t		db				'T ', _CHAR_NULL
 output_information_c		db				'C ', _CHAR_NULL
 output_information_g		db				'G ', _CHAR_NULL
-output_information_plus		db				'A+T;C+G ', _CHAR_NULL
+output_information_plus		db				'A+T C+G ', _CHAR_NULL
 data_processing_msg			db				_CHAR_CR, _CHAR_LF, 'Dados a serem processados:', _CHAR_CR, _CHAR_LF, _CHAR_CR, _CHAR_LF, _CHAR_NULL
 dna_base_amount_msg			db				'Numero de Bases na Entrada: ', _CHAR_NULL
 dna_group_amount_msg		db				'Numero de Grupos de Bases na Entrada: ', _CHAR_NULL
@@ -738,6 +739,13 @@ file_validation_end:
 				call	fcreate
 				mov		filehandle_dst, bx
 
+				lea		di, fileheader_dst				; Montar cabeçalho de arquivo de saída
+				call	create_header_string			; (CX recebe o número de bytes do cabeçalho)
+
+				mov		bx, filehandle_dst				; Escrever cabeçalho no arquivo de saída
+				lea		dx, fileheader_dst
+				call	fwrite
+
 ; PROCESSAR ARQUIVO DE ENTRADA PARA GERAR UMA SAÍDA
 file_output_loop:
 
@@ -1084,8 +1092,8 @@ fread			endp
 ; Função que escreve um byte de um arquivo especificado:
 ;
 ; Entrada: BX    - Handle do arquivo;
-;          DS:DX - Endereço do byte a ser escrito;
-;          CX    - Número de bytes para serem lidos;
+;          DS:DX - Endereço dos bytes a serem escritos;
+;          CX    - Número de bytes para serem escritos;
 ; Saída:   CF    - Flag indicando se a operação foi bem sucedida (0) ou não (1);
 ;          AX    - Número de bytes escritos;
 ;
@@ -1400,6 +1408,71 @@ option_plus_disabled:
 				ret
 
 print_valid_input	endp
+
+;
+; ===========================================================================================================================
+; CX create_header_string(DS:DI)
+; ===========================================================================================================================
+;
+; Função que monta a string de cabeçalho do arquivo de saída:
+;
+; Entrada: DS:DI - String para armazenar o cabeçalho;
+; Saída:   CX    - Quantidade de caracteres no cabeçalho.
+;
+; ===========================================================================================================================
+;
+
+create_header_string proc	near
+
+				push	di									; Guardar início da string para avaliar o tamanho total
+
+				lea		si, null_msg						; Limpar a string de saída
+				call	strcpy
+
+				cmp		option_a, _ENABLED					; Validar quais bases serão impressas no cabeçalho
+				jne		column_a_disabled
+
+				lea		si, dna_base_a_column
+				call	strcat
+
+column_a_disabled:
+				cmp		option_t, _ENABLED
+				jne		column_t_disabled
+
+				lea		si, dna_base_t_column
+				call	strcat
+
+column_t_disabled:
+				cmp		option_c, _ENABLED
+				jne		column_c_disabled
+
+				lea		si, dna_base_c_column
+				call	strcat
+
+column_c_disabled:
+				cmp		option_g, _ENABLED
+				jne		column_g_disabled
+
+				lea		si, dna_base_g_column
+				call	strcat
+
+column_g_disabled:
+				cmp		option_plus, _ENABLED
+				jne		column_plus_disabled
+
+				lea		si, dna_base_plus_column
+				call	strcat
+
+column_plus_disabled:
+				lea		si, newline							; Finalizar cabeçalho com quebra de linha
+				call	strcat
+
+				pop		di									; Descobrir o tamanho da string de cabeçalho
+				call	strlen
+
+				ret
+
+create_header_string endp
 
 ;
 ; ===========================================================================================================================
