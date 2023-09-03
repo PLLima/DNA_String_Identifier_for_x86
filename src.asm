@@ -51,6 +51,8 @@ _BASE_10					equ				10					; Base Numérica 10
 _SINGLE_BYTE				equ				1					; 1 Byte
 
 _SEEK_SET					equ				0					; Posições para posicionar cursor no arquivo
+_SEEK_CUR					equ				1
+_SEEK_END					equ				2
 
 _MIN_DNA_GROUP_SIZE			equ				1					; Tamanhos mínimo e máximo de grupos de DNA
 _MAX_DNA_GROUP_SIZE			equ				10000
@@ -1104,6 +1106,34 @@ fwrite			proc	near
 				ret
 
 fwrite			endp
+
+;
+; ===========================================================================================================================
+; CF, DX:AX fseek(BX, DX:CX, AL)
+; ===========================================================================================================================
+;
+; Função que muda o ponteiro do arquivo para a posição desejada:
+;
+; Entrada: BX    - Handle do arquivo;
+;          DX:CX - Offset para mover o ponteiro (4 bytes com número positivo ou negativo, DX é o LSB e CX é o MSB);
+;          AL    - Modo de navegação no arquivo:
+;                  > _SEEK_SET - Início do arquivo;
+;                  > _SEEK_CUR - Meio do arquivo;
+;                  > _SEEK_END - Final do arquivo;
+; Saída:   CF    - Flag indicando se a operação foi bem sucedida (0) ou não (1);
+;          DX:AX - Posição alterada no arquivo;
+;
+; ===========================================================================================================================
+;
+
+fseek			proc	near
+
+				mov		ah, 42h							; Chamar a respectiva interrupção de sistema
+				int		21h
+
+				ret
+
+fseek			endp
 
 ;
 ; ===========================================================================================================================
