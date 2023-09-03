@@ -1121,7 +1121,7 @@ fwrite			endp
 ;                  > _SEEK_CUR - Meio do arquivo;
 ;                  > _SEEK_END - Final do arquivo;
 ; Saída:   CF    - Flag indicando se a operação foi bem sucedida (0) ou não (1);
-;          DX:AX - Posição alterada no arquivo;
+;          DX:AX - Posição alterada no arquivo (DX é MSB e AX é LSB);
 ;
 ; ===========================================================================================================================
 ;
@@ -1134,6 +1134,30 @@ fseek			proc	near
 				ret
 
 fseek			endp
+
+;
+; ===========================================================================================================================
+; DX:CX fseek_offset(AX)
+; ===========================================================================================================================
+;
+; Função que tranforma um offset de uma word em um offset double word:
+;
+; Entrada: AX    - Offset de uma word;
+; Saída:   DX:CX - Offset double word (DX é LSB e CX é MSB);
+;
+; ===========================================================================================================================
+;
+
+fseek_offset	proc	near
+
+				cwd										; Tranformar valor de word para double word
+
+				mov		cx, dx							; Mover os dados para os devidos registradores
+				mov		dx, ax
+
+				ret
+
+fseek_offset	endp
 
 ;
 ; ===========================================================================================================================
