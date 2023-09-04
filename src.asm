@@ -20,10 +20,16 @@
 ; ===========================================================================================================================
 ;
 
+_TRUE						equ				1					; Verdadeiro/Falso
+_FALSE						equ				0
+
 _ENABLED					equ				1					; Habilitado/Desabilitado
 _DISABLED					equ				0
 
 _INVALID_NUMBER				equ				0FFFFh				; Número Inválido
+
+_SPECIAL_CHAR				equ				0					; Indicadores da flag de primeira base de grupo
+_BASE_CHAR					equ				1
 
 _CHAR_NULL					equ				0					; Caracteres Especiais
 _CHAR_CR					equ				0Dh
@@ -119,6 +125,9 @@ dna_base_t_amount			dw				?
 dna_base_c_amount			dw				?
 dna_base_g_amount			dw				?
 dna_base_string				db				13 dup (?)			; String utilizada para montar os grupos no arquivo de saída
+
+first_base_in_group_read	db				?					; Flag indicando se o primeiro caractere do grupo já foi lido
+first_base_in_group			db				?					; Flag que indica qual é o primeiro caractere do grupo de bases
 
 ; Strings Constantes
 null_msg					db				_CHAR_NULL
@@ -220,6 +229,7 @@ error_file_reading_msg3		db				'".', _CHAR_CR, _CHAR_LF, _CHAR_NULL
 				mov		filechar_newline, _DISABLED
 				mov		dna_group_count, 0
 				mov		specialchar_count, 0
+				mov		first_base_in_group_read, _FALSE
 
 				lea		bx, psp_string					; Copiar string de entrada do programa
 				call	copy_psp_s
@@ -780,25 +790,69 @@ file_output_read_char:
 				jmp		dna_group_validation
 
 special_char:
+				cmp		first_base_in_group_read, _FALSE ; Se for primeiro caractere do grupo
+				jne		not_first_special_char_in_group
+
+				mov		first_base_in_group_read, _TRUE	; Marcar flag de primeiro caractere do grupo lido
+				mov		first_base_in_group, _SPECIAL_CHAR ; Marcar primeiro caractere do grupo como especial
+
+not_first_special_char_in_group:
 				inc		specialchar_count				; Contabilizar a quantidade de caracteres de cada tipo
 				jmp		dna_group_validation
 
 a_char:
+				cmp		first_base_in_group_read, _FALSE ; Se for primeiro caractere do grupo
+				jne		not_first_char_a_in_group
+
+				mov		first_base_in_group_read, _TRUE	; Marcar flag de primeiro caractere do grupo lido
+				mov		first_base_in_group, _BASE_CHAR	; Marcar primeiro caractere do grupo como base
+
+not_first_char_a_in_group:
 				inc		dna_base_a_amount
 				jmp		dna_group_validation
 
 t_char:
+				cmp		first_base_in_group_read, _FALSE ; Se for primeiro caractere do grupo
+				jne		not_first_char_t_in_group
+
+				mov		first_base_in_group_read, _TRUE	; Marcar flag de primeiro caractere do grupo lido
+				mov		first_base_in_group, _BASE_CHAR	; Marcar primeiro caractere do grupo como base
+
+not_first_char_t_in_group:
 				inc		dna_base_t_amount
 				jmp		dna_group_validation
 
 c_char:
+				cmp		first_base_in_group_read, _FALSE ; Se for primeiro caractere do grupo
+				jne		not_first_char_c_in_group
+
+				mov		first_base_in_group_read, _TRUE	; Marcar flag de primeiro caractere do grupo lido
+				mov		first_base_in_group, _BASE_CHAR	; Marcar primeiro caractere do grupo como base
+
+not_first_char_c_in_group:
 				inc		dna_base_c_amount
 				jmp		dna_group_validation
 
 g_char:
+				cmp		first_base_in_group_read, _FALSE ; Se for primeiro caractere do grupo
+				jne		not_first_char_g_in_group
+
+				mov		first_base_in_group_read, _TRUE	; Marcar flag de primeiro caractere do grupo lido
+				mov		first_base_in_group, _BASE_CHAR	; Marcar primeiro caractere do grupo como base
+
+not_first_char_g_in_group:
 				inc		dna_base_g_amount
 
 dna_group_validation:
+				cmp		first_base_in_group, _SPECIAL_CHAR ; Lidar com primeiro caractere do grupo sendo especial
+				jne		not_special_first_char
+
+				mov		specialchar_count, 0			; Reiniciar contagens e flags necessários
+				mov		first_base_in_group_read, _FALSE
+
+				jmp		file_output_read_char
+
+not_special_first_char:
 				mov		ax, dna_base_a_amount			; Descobrir se um grupo já foi processado
 				add		ax, dna_base_t_amount
 				add		ax, dna_base_c_amount
@@ -830,6 +884,7 @@ dna_group_validation:
 				mov		dna_base_t_amount, 0
 				mov		dna_base_c_amount, 0
 				mov		dna_base_g_amount, 0
+				mov		first_base_in_group_read, _FALSE; Desmarcar flag de primeiro caractere do grupo lido
 
 				jmp		file_output_loop
 

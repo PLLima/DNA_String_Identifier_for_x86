@@ -11,7 +11,7 @@ Pedro Lubaszewski Lima
 ## Version:
 
 ```
-0.55
+0.90
 ```
 
 ## Date:
